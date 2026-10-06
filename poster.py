@@ -492,8 +492,12 @@ def launch(pw, acct: Account):
             # Block WebRTC completely at browser level
             "--enforce-webrtc-ip-permission-check",
             "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+            # Required for root / Docker / Render environments
+            "--no-sandbox",
+            "--no-zygote",
+            "--disable-setuid-sandbox",
         ],
-        ignore_default_args=["--enable-automation", "--no-sandbox"],
+        ignore_default_args=["--enable-automation"],
     )
     if acct.proxy:
         kw["proxy"] = {"server": acct.proxy}
