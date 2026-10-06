@@ -1,0 +1,14 @@
+[
+  {
+    "place_id": "",
+    "stars": 5,
+    "search_query": "https://maps.app.goo.gl/Ls8HyEtZEZkvLZcj8",
+    "texts": [
+      "Great roofing company. The team was friendly, reliable, and clearly knew what they were doing. The finished work looks excellent. Highly recommended.",
+      "Great roofing company. The team was {friendly|professional|knowledgeable}, {reliable|dependable|punctual}, and clearly knew what they were doing. The finished work looks {excellent|outstanding|fantastic}. Highly recommended.",
+      "{Great|Excellent|Fantastic} roofing company. The team was friendly, reliable, and clearly knew what they were doing. The finished work looks {excellent|outstanding|superb}. {Highly recommended|Strongly recommended|Would definitely recommend}.",
+      "Great roofing company. The team was friendly, reliable, and {clearly knew what they were doing|very skilled|highly professional}. The finished work looks excellent. Highly recommended.",
+      "Great roofing company. The team was friendly, {reliable|trustworthy|consistent}, and clearly knew what they were doing. The {finished work|end result|final result} looks excellent. Highly recommended."
+    ]
+  }
+]

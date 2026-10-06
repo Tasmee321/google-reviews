@@ -1,0 +1,32 @@
+# ============ GBP POSTER — MAXIMUM STEALTH CONFIG ============
+
+# Browser display
+HEADLESS=false          # false = window dikhaye | true = background mein chale
+
+# Action delay (ms) — 50-80 best for stealth
+SLOW_MO=55
+
+# Gap between reviews (seconds)
+GAP_MIN=1200            # 20 min
+GAP_MAX=5400            # 90 min
+
+# Max reviews per Gmail account per day
+DAILY_LIMIT_PER_ACCT=2
+
+# Retry attempts on failure
+MAX_RETRIES=3
+
+# Browser locale
+TZ=Asia/Karachi
+LOCALE=en-US
+
+# Warm-up browsing before review (true = more natural, recommended)
+WARMUP_ENABLED=true
+
+# ============ ADMIN LOGIN ============
+ADMIN_USER=admin
+ADMIN_PASS=admin123
+
+# ============ FLASK SESSION ============
+# Change this to a long random string in production
+FLASK_SECRET=change_me_to_random_secret_key_32chars

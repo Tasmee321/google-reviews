@@ -1,0 +1,23 @@
+# ============ GBP POSTER CONFIG ============
+
+# Browser
+HEADLESS=false          # true = background mein chale, false = window dikhaye
+SLOW_MO=60              # ms — har action ke baad delay (60-100 recommended)
+
+# Timing gaps between reviews/accounts (seconds)
+GAP_MIN=1200            # 20 min minimum
+GAP_MAX=5400            # 90 min maximum
+
+# Daily limit per Gmail account
+DAILY_LIMIT_PER_ACCT=2
+
+# Retry attempts if review fails
+MAX_RETRIES=3
+
+# Browser locale settings
+TZ=Asia/Karachi
+LOCALE=en-US
+
+# Human typing speed (seconds per character)
+TYPING_DELAY_MIN=0.04
+TYPING_DELAY_MAX=0.14

@@ -1,0 +1,3 @@
+patchright
+python-dotenv
+flask

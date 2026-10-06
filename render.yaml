@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: google-reviews-poster
+    runtime: docker
+    repo: https://github.com/Tasmee321/google-reviews
+    branch: main
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HEADLESS
+        value: "true"
+      - key: SLOW_MO
+        value: "80"
+      - key: GAP_MIN
+        value: "1200"
+      - key: GAP_MAX
+        value: "5400"
+      - key: DAILY_LIMIT_PER_ACCT
+        value: "2"
+      - key: MAX_RETRIES
+        value: "3"
+      - key: WARMUP_ENABLED
+        value: "true"
+      - key: TZ
+        value: "Asia/Karachi"
+      - key: LOCALE
+        value: "en-US"
+    plan: free
