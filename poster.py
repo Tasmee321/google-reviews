@@ -438,6 +438,80 @@ def is_logged_in(ctx) -> bool:
         except Exception:
             pass
 
+
+def auto_login(page, acct: Account) -> bool:
+    """Full automated Google login — email → password → 2FA if totp set."""
+    log.info("%s: auto-login starting...", acct.email)
+    try:
+        page.goto("https://accounts.google.com/signin/v2/identifier", wait_until="domcontentloaded", timeout=30000)
+        delay(1.5, 3.0)
+
+        # ── EMAIL ──
+        email_sel = 'input[type="email"]'
+        page.wait_for_selector(email_sel, timeout=15000)
+        human_type(page, page.query_selector(email_sel), acct.email)
+        delay(0.8, 1.5)
+
+        next_btn = page.query_selector('#identifierNext button, button:has-text("Next")')
+        if next_btn:
+            human_click(page, next_btn)
+        else:
+            page.keyboard.press("Enter")
+        delay(2.0, 3.5)
+
+        # ── PASSWORD ──
+        pass_sel = 'input[type="password"]'
+        page.wait_for_selector(pass_sel, timeout=15000)
+        delay(0.8, 1.5)
+        human_type(page, page.query_selector(pass_sel), acct.password)
+        delay(0.8, 1.5)
+
+        pass_next = page.query_selector('#passwordNext button, button:has-text("Next")')
+        if pass_next:
+            human_click(page, pass_next)
+        else:
+            page.keyboard.press("Enter")
+        delay(3.0, 5.0)
+
+        # ── 2FA / APP PASSWORD ──
+        # If totp (app password) is set, use it when prompted
+        if acct.totp:
+            try:
+                # Google may show an OTP / backup code / app-password prompt
+                otp_sel = 'input[type="tel"], input[type="text"][autocomplete="one-time-code"], input#totpPin'
+                page.wait_for_selector(otp_sel, timeout=8000)
+                delay(0.8, 1.5)
+                human_type(page, page.query_selector(otp_sel), acct.totp)
+                delay(0.8, 1.5)
+                otp_next = page.query_selector('button:has-text("Next"), button:has-text("Verify")')
+                if otp_next:
+                    human_click(page, otp_next)
+                else:
+                    page.keyboard.press("Enter")
+                delay(3.0, 5.0)
+                log.info("%s: 2FA code entered", acct.email)
+            except PWTimeout:
+                # No 2FA prompt — already past it or not required this session
+                log.info("%s: no 2FA prompt (profile may be warm)", acct.email)
+
+        # ── VERIFY ──
+        delay(2.0, 3.0)
+        if "myaccount.google.com" in page.url or "google.com" in page.url and "accounts.google.com" not in page.url:
+            log.info("%s: auto-login SUCCESS", acct.email)
+            return True
+
+        # Check if still on accounts page (wrong password / blocked)
+        if "accounts.google.com" in page.url:
+            log.error("%s: auto-login FAILED — still on accounts page", acct.email)
+            return False
+
+        log.info("%s: auto-login likely OK (url: %s)", acct.email, page.url)
+        return True
+
+    except Exception as e:
+        log.error("%s: auto-login crash: %s", acct.email, e)
+        return False
+
 # ============ WARM-UP BROWSING ============
 # Browsing other sites before review — makes session look organic
 WARMUP_SITES = [
@@ -1048,12 +1122,13 @@ def run():
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
                 if not is_logged_in(ctx):
-                    print(f"\n{'='*60}")
-                    print(f"  LOGIN REQUIRED: {acct.email}")
-                    print(f"  Chrome mein login karo, phir ENTER dabao")
-                    print(f"{'='*60}")
-                    input("  >> ENTER: ")
+                    log.info("%s: not logged in — attempting auto-login", acct.email)
                     page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                    ok = auto_login(page, acct)
+                    if not ok:
+                        log.error("%s: auto-login failed — skipping account", acct.email)
+                        stats["failed"] += 1
+                        continue
 
                 # Warm-up browsing — organic session
                 warmup_session(page, acct)
