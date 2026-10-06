@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tasmee Review Agency</title>
+<style>
+  :root {
+    --bg:       #080c10;
+    --surface:  #0e1520;
+    --card:     #111c2a;
+    --border:   #1e2d3d;
+    --border2:  #243347;
+    --accent:   #3b82f6;
+    --accent-h: #60a5fa;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --yellow:   #f59e0b;
+    --cyan:     #06b6d4;
+    --purple:   #a855f7;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --muted2:   #94a3b8;
+    --input-bg: #0a1118;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── LOGIN SCREEN ── */
+  #loginScreen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999;
+  }
+  #loginScreen.hidden { display: none; }
+  .login-box {
+    background: var(--card);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 360px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+  .login-logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .login-logo .logo-icon {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+  .login-logo h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+  .login-logo p  { font-size: 12px; color: var(--muted2); margin-top: 4px; }
+  .login-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--red);
+    margin-bottom: 14px;
+    display: none;
+  }
+  .login-error.show { display: block; }
+
+  /* ── NAV ── */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 58px;
+    position: sticky; top: 0; z-index: 90;
+  }
+  .nav-left { display: flex; align-items: center; gap: 14px; }
+  .nav-logo {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .nav-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .nav-title span { color: var(--muted2); font-weight: 400; font-size: 13px; margin-left: 6px; }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.running { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .btn-logout {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted2); font-size: 12px; padding: 5px 12px; cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 12px 20px;
+    font-size: 13px; font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent-h); border-color: var(--accent); }
+  .tab-icon { font-size: 14px; }
+
+  /* ── LAYOUT ── */
+  .page { padding: 28px; max-width: 940px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 18px;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--muted2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── STATS GRID ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.red::before   { background: var(--red); }
+  .stat-card.yellow::before{ background: var(--yellow); }
+  .stat-num { font-size: 32px; font-weight: 800; line-height: 1; }
+  .stat-num.green  { color: var(--green); }
+  .stat-num.red    { color: var(--red); }
+  .stat-num.yellow { color: var(--yellow); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* ── FORMS ── */
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted2);
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  label:first-child { margin-top: 0; }
+  input, select, textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 13px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+  }
+  input::placeholder { color: var(--muted); }
+  textarea { resize: vertical; min-height: 72px; }
+  select option { background: var(--card); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn-primary  { background: var(--accent);  color: #fff; }
+  .btn-primary:hover  { background: #2563eb; }
+  .btn-green    { background: var(--green);   color: #000; }
+  .btn-green:hover    { background: #16a34a; }
+  .btn-danger   { background: var(--red);     color: #fff; }
+  .btn-danger:hover   { background: #dc2626; }
+  .btn-ghost    { background: transparent; color: var(--muted2); border: 1px solid var(--border); }
+  .btn-ghost:hover    { border-color: var(--border2); color: var(--text); }
+  .btn-cyan     { background: var(--cyan);    color: #000; }
+  .btn-cyan:hover     { background: #0891b2; }
+  .btn-purple   { background: var(--purple);  color: #fff; }
+  .btn-sm       { padding: 6px 12px; font-size: 12px; }
+  .btn-xs       { padding: 4px 9px; font-size: 11px; border-radius: 5px; }
+  .btn-group    { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .big-btn      { padding: 13px 30px; font-size: 14px; border-radius: 10px; }
+
+  /* ── ITEM LIST ── */
+  .item-list { display: flex; flex-direction: column; gap: 10px; }
+  .acct-item, .target-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 14px;
+    transition: border-color .15s;
+  }
+  .acct-item:hover, .target-item:hover { border-color: var(--border2); }
+  .item-info { flex: 1; min-width: 0; }
+  .item-email { font-size: 14px; font-weight: 600; color: var(--text); }
+  .item-sub {
+    font-size: 11px; color: var(--muted); margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .item-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+  }
+  .badge-green  { background: rgba(34,197,94,.12); color: var(--green); }
+  .badge-red    { background: rgba(239,68,68,.12);  color: var(--red); }
+  .badge-yellow { background: rgba(245,158,11,.12); color: var(--yellow); }
+  .badge-blue   { background: rgba(59,130,246,.12); color: var(--accent-h); }
+  .badge-purple { background: rgba(168,85,247,.12); color: var(--purple); }
+
+  /* ── LOGS ── */
+  .log-box {
+    background: #040810;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    height: 420px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .log-line  { padding: 1px 0; }
+  .log-info  { color: #86efac; }
+  .log-warn  { color: var(--yellow); }
+  .log-error { color: var(--red); }
+  .log-def   { color: #6b7280; }
+
+  /* ── TOGGLE ── */
+  .toggle-wrap { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--border2);
+    border-radius: 24px; cursor: pointer; transition: .2s;
+  }
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: .2s;
+  }
+  input:checked + .slider { background: var(--green); }
+  input:checked + .slider::before { transform: translateX(18px); }
+  .toggle-label { font-size: 13px; color: var(--text); }
+
+  /* ── DIVIDER ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  /* ── SECTION HEADING ── */
+  .section-label {
+    font-size: 11px; font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 22px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* ── CONTROL ROW ── */
+  .control-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 26px; right: 26px;
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 10px; padding: 12px 20px;
+    font-size: 13px; font-weight: 500;
+    display: none; z-index: 998;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    max-width: 340px;
+  }
+  #toast.show   { display: flex; align-items: center; gap: 10px; animation: fadeUp .2s; }
+  #toast.ok     { border-left: 3px solid var(--green); }
+  #toast.err    { border-left: 3px solid var(--red); }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+  /* ── MODAL ── */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.75);
+    backdrop-filter: blur(3px);
+    z-index: 200;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    padding: 26px;
+    width: 100%; max-width: 520px;
+    max-height: 88vh; overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,.6);
+  }
+  .modal-title {
+    font-size: 16px; font-weight: 700;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ── REVIEW ITEM (inside target modal) ── */
+  .review-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .review-item-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .review-num {
+    font-size: 11px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+  }
+  .remove-btn {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 16px;
+    padding: 2px 6px; border-radius: 4px;
+    transition: color .15s;
+  }
+  .remove-btn:hover { color: var(--red); }
+  .star-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 20px; color: var(--border2); transition: color .1s; padding: 0;
+    line-height: 1;
+  }
+  .star-btn.active { color: var(--yellow); }
+
+  /* ── GMAIL BULK SLOT ── */
+  .gmail-slot {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .gmail-slot input { margin: 0; }
+  .slot-num {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    grid-column: 1 / -1;
+    margin-bottom: -2px;
+  }
+
+  /* ── SETTINGS ── */
+  .setting-row {
+    display: grid; grid-template-columns: 1fr 1.4fr;
+    gap: 12px; align-items: start;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .setting-desc  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .setting-input input, .setting-input select { margin: 0; }
+
+  /* ── EMPTY STATE ── */
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+
+  /* ── INFO BOX ── */
+  .info-box {
+    background: rgba(59,130,246,.07);
+    border: 1px solid rgba(59,130,246,.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px; color: var(--muted2);
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  /* ── 2FA BADGE ── */
+  .twofa-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(168,85,247,.12);
+    color: var(--purple);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon">⭐</div>
+      <h1>Tasmee Review Agency</h1>
+      <p>Admin Panel — Secure Access</p>
+    </div>
+    <div class="login-error" id="loginErr"></div>
+    <label>Username</label>
+    <input type="text" id="loginUser" placeholder="admin" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter') doLogin()">
+    <div class="btn-group" style="margin-top:20px;">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">
+        🔐 Login
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="mainApp" style="display:none;">
+
+<nav>
+  <div class="nav-left">
+    <div class="nav-logo">⭐</div>
+    <div class="nav-title">Tasmee Review Agency <span>/ Dashboard</span></div>
+  </div>
+  <div class="nav-right">
+    <div class="status-pill">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Idle</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('run',this)"><span class="tab-icon">▶</span> Run</div>
+  <div class="tab" onclick="switchTab('accounts',this)"><span class="tab-icon">📧</span> Accounts</div>
+  <div class="tab" onclick="switchTab('targets',this)"><span class="tab-icon">🎯</span> Targets</div>
+  <div class="tab" onclick="switchTab('logs',this)"><span class="tab-icon">📋</span> Logs</div>
+  <div class="tab" onclick="switchTab('settings',this)"><span class="tab-icon">⚙️</span> Settings</div>
+</div>
+
+<div class="page">
+
+<!-- ══ RUN PANEL ══ -->
+<div class="panel active" id="panel-run">
+  <div class="stats-grid">
+    <div class="stat-card green">
+      <div class="stat-num green" id="statPosted">—</div>
+      <div class="stat-label">✓ Posted</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-num red" id="statFailed">—</div>
+      <div class="stat-label">✗ Failed</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-num yellow" id="statSkipped">—</div>
+      <div class="stat-label">⊘ Skipped</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Poster Controls</div>
+    </div>
+    <div class="control-row">
+      <button class="btn btn-green big-btn" id="btnStart" onclick="startPoster()">▶ Start Poster</button>
+      <button class="btn btn-danger big-btn" id="btnStop" onclick="stopPoster()" disabled>■ Stop</button>
+      <button class="btn btn-ghost" onclick="resetState()">↺ Reset State</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px;">
+      State reset karo agar accounts "skip (done)" show kar rahe hain.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Live Log</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('liveLog').innerHTML=''">Clear</button>
+    </div>
+    <div class="log-box" id="liveLog">Poster start karo to log yahan aayega...</div>
+  </div>
+</div>
+
+<!-- ══ ACCOUNTS PANEL ══ -->
+<div class="panel" id="panel-accounts">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Gmail Accounts</div>
+    </div>
+    <div class="info-box">
+      ℹ️ Gmail ki 2-Step Verification ON ho to <b>App Password</b> use karo (16 characters, Google account settings se generate karo). Normal password kaam nahi karta 2FA ke saath.
+    </div>
+    <div class="item-list" id="accountList"></div>
+    <div class="btn-group">
+      <button class="btn btn-cyan" onclick="openAddAccount()">+ Add Account</button>
+      <button class="btn btn-ghost btn-sm" onclick="openBulkAdd()">📋 Bulk Add (10 slots)</button>
+      <button class="btn btn-primary" onclick="saveAccounts()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TARGETS PANEL ══ -->
+<div class="panel" id="panel-targets">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Business Targets</div>
+    </div>
+    <div class="item-list" id="targetList"></div>
+    <div class="btn-group">
+      <button class="btn btn-cyan" onclick="openAddTarget()">+ Add Target</button>
+      <button class="btn btn-primary" onclick="saveTargets()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOGS PANEL ══ -->
+<div class="panel" id="panel-logs">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Log Output (last 200 lines)</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadLogs()">↺ Refresh</button>
+    </div>
+    <div class="log-box" id="logBox">Loading...</div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS PANEL ══ -->
+<div class="panel" id="panel-settings">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Admin Credentials</div>
+    </div>
+    <div class="info-box">⚠️ Admin password change karne ke baad environment variable (.env) mein save hoga. Server restart zaroor karo changes apply hone ke liye.</div>
+    <div class="row2">
+      <div>
+        <label>Admin Username</label>
+        <input type="text" id="s_admin_user" placeholder="admin">
+      </div>
+      <div>
+        <label>New Password (khali choro agar change nahi karna)</label>
+        <input type="password" id="s_admin_pass" placeholder="••••••••">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Poster Settings</div>
+    </div>
+
+    <div class="section-label">Browser</div>
+    <div class="row2">
+      <div>
+        <label>Slow Motion Delay (ms)</label>
+        <input type="number" id="s_slow_mo" placeholder="55">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">50-80 best for stealth. Zyada = slow but more human-like.</div>
+      </div>
+      <div>
+        <label>Locale</label>
+        <input type="text" id="s_locale" placeholder="en-US">
+      </div>
+    </div>
+    <div class="row2" style="margin-top:12px;">
+      <div>
+        <label>Timezone</label>
+        <input type="text" id="s_tz" placeholder="Asia/Karachi">
+      </div>
+      <div>
+        <label style="margin-top:0;">Headless Mode</label>
+        <select id="s_headless">
+          <option value="false">false — Browser window dikhaye</option>
+          <option value="true">true — Background mein chale</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-label">Review Posting</div>
+    <div class="row3">
+      <div>
+        <label>Daily Limit Per Account</label>
+        <input type="number" id="s_daily_limit" placeholder="2">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Ek Gmail se roz kitne reviews</div>
+      </div>
+      <div>
+        <label>Gap Min (seconds)</label>
+        <input type="number" id="s_gap_min" placeholder="1200">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Reviews ke beech minimum wait</div>
+      </div>
+      <div>
+        <label>Gap Max (seconds)</label>
+        <input type="number" id="s_gap_max" placeholder="5400">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Reviews ke beech maximum wait</div>
+      </div>
+    </div>
+    <div class="row2" style="margin-top:12px;">
+      <div>
+        <label>Max Retries on Failure</label>
+        <input type="number" id="s_max_retries" placeholder="3">
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:2px;">
+        <div class="toggle-wrap">
+          <label class="toggle">
+            <input type="checkbox" id="s_warmup">
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label">Warm-up Browsing (recommended ON)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+      <button class="btn btn-ghost" onclick="loadSettings()">↺ Reload</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /page -->
+</div><!-- /mainApp -->
+
+<!-- ══ ACCOUNT MODAL ══ -->
+<div class="modal-bg" id="acctModal">
+  <div class="modal">
+    <div class="modal-title" id="acctModalTitle">📧 Add Account</div>
+    <label>Gmail Address</label>
+    <input type="email" id="acctEmail" placeholder="example@gmail.com">
+
+    <label>Password</label>
+    <input type="password" id="acctPass" placeholder="Gmail password ya App Password">
+
+    <label>
+      2FA / App Password
+      <span class="twofa-badge">🔐 2FA</span>
+    </label>
+    <input type="text" id="acctTwoFA" placeholder="xxxx xxxx xxxx xxxx  (Google App Password — 16 chars)"
+      maxlength="19" oninput="formatAppPass(this)">
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+      2-Step Verification ON hai to yahan App Password daalo. Google Account → Security → 2-Step Verification → App Passwords se generate karo.
+    </div>
+
+    <label>Proxy (optional)</label>
+    <input type="text" id="acctProxy" placeholder="http://user:pass@host:port">
+
+    <div class="toggle-wrap">
+      <label class="toggle">
+        <input type="checkbox" id="acctEnabled" checked>
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Account enabled</span>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveAccount()">Save</button>
+      <button class="btn btn-ghost" onclick="closeModal('acctModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BULK ADD MODAL ══ -->
+<div class="modal-bg" id="bulkModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-title">📋 Bulk Add — 10 Gmail Slots</div>
+    <div class="info-box">Ek baar mein 10 accounts add karo. Khali rows skip ho jayenge.</div>
+    <div style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1fr;gap:6px;margin-bottom:8px;padding:0 2px;">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;">EMAIL</div>
+      <div style="font-size:11px;color:var(--muted);font-weight:700;">PASSWORD</div>
+      <div style="font-size:11px;color:var(--muted);font-weight:700;">APP PASSWORD (16)</div>
+      <div style="font-size:11px;color:var(--muted);font-weight:700;">PROXY</div>
+    </div>
+    <div id="bulkSlots"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveBulk()">✓ Add All</button>
+      <button class="btn btn-ghost" onclick="closeModal('bulkModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TARGET MODAL ══ -->
+<div class="modal-bg" id="targetModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title" id="targetModalTitle">🎯 Add Target</div>
+
+    <label>Business Link (Google Maps URL)</label>
+    <input type="text" id="tgtLink" placeholder="https://maps.app.goo.gl/... ya full Maps URL">
+
+    <label>Reviews Kitne Lagane Hain (is business pe)</label>
+    <input type="number" id="tgtCount" value="1" min="1" max="50" placeholder="e.g. 5">
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+      Neeche add kiye reviews randomly pick hote hain. Jitne reviews lagane hain utne variants karo.
+    </div>
+
+    <hr style="margin:16px 0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;">Review Variants</div>
+      <button class="btn btn-ghost btn-xs" onclick="addReviewVariant()">+ Add Variant</button>
+    </div>
+
+    <div id="reviewVariants"></div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveTarget()">Save</button>
+      <button class="btn btn-ghost" onclick="closeModal('targetModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let accounts    = [];
+let targets     = [];
+let editAcctIdx = -1;
+let editTgtIdx  = -1;
+let liveEs      = null;
+
+// ═══════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err  = document.getElementById('loginErr');
+  if (!user || !pass) { showLoginErr('Username aur password daalo'); return; }
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: user, password: pass})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('mainApp').style.display = '';
+      initApp();
+    } else {
+      showLoginErr(d.msg || 'Login failed');
+    }
+  } catch(e) { showLoginErr('Server se connection nahi'); }
+}
+
+function showLoginErr(msg) {
+  const el = document.getElementById('loginErr');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+async function logout() {
+  await fetch('/api/logout', {method:'POST'});
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+function initApp() {
+  loadAccounts();
+  loadTargets();
+  loadSettings();
+  pollStatus();
+  setInterval(pollStatus, 3000);
+}
+
+// Check if already logged in (page reload)
+(async function checkSession() {
+  try {
+    const r = await fetch('/api/poster/status');
+    if (r.status === 401) return; // not logged in
+    if (r.ok) {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('mainApp').style.display = '';
+      initApp();
+    }
+  } catch(e) {}
+})();
+
+// ═══════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'logs') loadLogs();
+  if (name === 'settings') loadSettings();
+}
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'ok' ? '✓ ' : '✗ ') + msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = '', 2800);
+}
+
+// ═══════════════════════════════════════════════
+//  STATUS POLL
+// ═══════════════════════════════════════════════
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/poster/status');
+    if (r.status === 401) return;
+    const d = await r.json();
+    const dot   = document.getElementById('statusDot');
+    const txt   = document.getElementById('statusText');
+    const start = document.getElementById('btnStart');
+    const stop  = document.getElementById('btnStop');
+    if (d.running) {
+      dot.classList.add('running');
+      txt.textContent = 'Running';
+      start.disabled = true;
+      stop.disabled  = false;
+    } else {
+      dot.classList.remove('running');
+      txt.textContent = 'Idle';
+      start.disabled = false;
+      stop.disabled  = true;
+    }
+    updateStats();
+  } catch(e) {}
+}
+
+async function updateStats() {
+  try {
+    const lr = await fetch('/api/logs/latest');
+    const ld = await lr.json();
+    let posted=0, failed=0, skipped=0;
+    for (const l of (ld.lines || [])) {
+      const m = l.match(/'posted':\s*(\d+).*'skipped':\s*(\d+).*'failed':\s*(\d+)/);
+      if (m) { posted=+m[1]; skipped=+m[2]; failed=+m[3]; }
+    }
+    document.getElementById('statPosted').textContent  = posted;
+    document.getElementById('statFailed').textContent  = failed;
+    document.getElementById('statSkipped').textContent = skipped;
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
+//  POSTER CONTROLS
+// ═══════════════════════════════════════════════
+async function startPoster() {
+  const r = await fetch('/api/poster/start', {method:'POST'});
+  const d = await r.json();
+  if (d.ok) { toast('Poster started'); startLiveLog(); }
+  else       { toast(d.msg, 'err'); }
+  pollStatus();
+}
+
+async function stopPoster() {
+  await fetch('/api/poster/stop', {method:'POST'});
+  toast('Poster stopped');
+  if (liveEs) { liveEs.close(); liveEs = null; }
+  pollStatus();
+}
+
+async function resetState() {
+  await fetch('/api/state/reset', {method:'POST'});
+  toast('State reset — accounts ab fresh chalenge');
+}
+
+// ═══════════════════════════════════════════════
+//  LIVE LOG
+// ═══════════════════════════════════════════════
+function startLiveLog() {
+  if (liveEs) liveEs.close();
+  const box = document.getElementById('liveLog');
+  box.innerHTML = '';
+  liveEs = new EventSource('/api/logs/stream');
+  liveEs.onmessage = (e) => {
+    const div = document.createElement('div');
+    div.className = 'log-line ' + lineClass(e.data);
+    div.textContent = e.data;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  };
+}
+
+function lineClass(l) {
+  if (l.includes('ERROR'))   return 'log-error';
+  if (l.includes('WARNING')) return 'log-warn';
+  if (l.includes('INFO'))    return 'log-info';
+  return 'log-def';
+}
+
+async function loadLogs() {
+  const r = await fetch('/api/logs/latest');
+  const d = await r.json();
+  const box = document.getElementById('logBox');
+  box.innerHTML = '';
+  (d.lines || []).forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'log-line ' + lineClass(l);
+    div.textContent = l;
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════
+//  ACCOUNTS
+// ═══════════════════════════════════════════════
+async function loadAccounts() {
+  const r = await fetch('/api/accounts');
+  accounts = await r.json();
+  renderAccounts();
+}
+
+function renderAccounts() {
+  const list = document.getElementById('accountList');
+  if (!accounts.length) {
+    list.innerHTML = '<div class="empty">Koi account nahi — Add karo.</div>';
+    return;
+  }
+  list.innerHTML = accounts.map((a, i) => `
+    <div class="acct-item">
+      <div class="item-info">
+        <div class="item-email">${a.email}</div>
+        <div class="item-sub">
+          ${a.proxy || 'No proxy'}
+          ${a.totp ? ' &nbsp;|&nbsp; <span class="twofa-badge">🔐 2FA</span>' : ''}
+        </div>
+      </div>
+      <div class="item-actions">
+        <span class="badge ${a.enabled ? 'badge-green' : 'badge-red'}">${a.enabled ? 'ON' : 'OFF'}</span>
+        <button class="btn btn-ghost btn-xs" onclick="editAccount(${i})">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteAccount(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openAddAccount() {
+  editAcctIdx = -1;
+  document.getElementById('acctModalTitle').textContent = '📧 Add Account';
+  document.getElementById('acctEmail').value   = '';
+  document.getElementById('acctPass').value    = '';
+  document.getElementById('acctTwoFA').value   = '';
+  document.getElementById('acctProxy').value   = '';
+  document.getElementById('acctEnabled').checked = true;
+  document.getElementById('acctModal').classList.add('open');
+}
+
+function editAccount(i) {
+  editAcctIdx = i;
+  const a = accounts[i];
+  document.getElementById('acctModalTitle').textContent = '📧 Edit Account';
+  document.getElementById('acctEmail').value   = a.email;
+  document.getElementById('acctPass').value    = a.password;
+  document.getElementById('acctTwoFA').value   = a.totp || '';
+  document.getElementById('acctProxy').value   = a.proxy || '';
+  document.getElementById('acctEnabled').checked = a.enabled !== false;
+  document.getElementById('acctModal').classList.add('open');
+}
+
+function saveAccount() {
+  const email = document.getElementById('acctEmail').value.trim();
+  const pass  = document.getElementById('acctPass').value.trim();
+  if (!email || !pass) { toast('Email aur password dono chahiye', 'err'); return; }
+  const obj = {
+    email,
+    password: pass,
+    totp:    document.getElementById('acctTwoFA').value.replace(/\s/g,'') || null,
+    proxy:   document.getElementById('acctProxy').value.trim() || null,
+    enabled: document.getElementById('acctEnabled').checked,
+  };
+  if (editAcctIdx === -1) accounts.push(obj);
+  else accounts[editAcctIdx] = obj;
+  renderAccounts();
+  closeModal('acctModal');
+}
+
+function deleteAccount(i) { accounts.splice(i,1); renderAccounts(); }
+
+async function saveAccounts() {
+  await fetch('/api/accounts', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(accounts)
+  });
+  toast('Accounts saved');
+}
+
+// ── BULK ADD ──
+function openBulkAdd() {
+  const wrap = document.getElementById('bulkSlots');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 10; i++) {
+    const row = document.createElement('div');
+    row.className = 'gmail-slot';
+    row.innerHTML = `
+      <input type="email"   placeholder="email${i+1}@gmail.com"    data-idx="${i}" data-field="email">
+      <input type="password" placeholder="password"                  data-idx="${i}" data-field="pass">
+      <input type="text"     placeholder="App password (16 chars)"   data-idx="${i}" data-field="totp" maxlength="19" oninput="formatAppPass(this)">
+      <input type="text"     placeholder="proxy (optional)"          data-idx="${i}" data-field="proxy">
+    `;
+    wrap.appendChild(row);
+  }
+  document.getElementById('bulkModal').classList.add('open');
+}
+
+function saveBulk() {
+  const slots = document.getElementById('bulkSlots').querySelectorAll('.gmail-slot');
+  let added = 0;
+  slots.forEach(slot => {
+    const email = slot.querySelector('[data-field="email"]').value.trim();
+    const pass  = slot.querySelector('[data-field="pass"]').value.trim();
+    const totp  = slot.querySelector('[data-field="totp"]').value.replace(/\s/g,'') || null;
+    const proxy = slot.querySelector('[data-field="proxy"]').value.trim() || null;
+    if (!email || !pass) return;
+    if (accounts.find(a => a.email === email)) return; // skip dupe
+    accounts.push({ email, password: pass, totp, proxy, enabled: true });
+    added++;
+  });
+  renderAccounts();
+  closeModal('bulkModal');
+  toast(`${added} accounts added`);
+}
+
+// ── FORMAT APP PASS ──
+function formatAppPass(el) {
+  let v = el.value.replace(/\s/g,'').toLowerCase().slice(0,16);
+  el.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+
+// ═══════════════════════════════════════════════
+//  TARGETS
+// ═══════════════════════════════════════════════
+async function loadTargets() {
+  const r = await fetch('/api/targets');
+  targets = await r.json();
+  renderTargets();
+}
+
+function renderTargets() {
+  const list = document.getElementById('targetList');
+  if (!targets.length) {
+    list.innerHTML = '<div class="empty">Koi target nahi — Add karo.</div>';
+    return;
+  }
+  list.innerHTML = targets.map((t, i) => {
+    const reviewCount = t.review_count || (t.texts ? t.texts.length : 1);
+    const variants    = (t.reviews || []).length || (t.texts ? t.texts.length : 0);
+    return `
+    <div class="target-item">
+      <div class="item-info">
+        <div class="item-email" style="font-size:13px;">${t.search_query || t.place_id || 'No link'}</div>
+        <div class="item-sub">${reviewCount} reviews lagane hain &nbsp;|&nbsp; ${variants} variants &nbsp;|&nbsp; ★ mixed ratings</div>
+      </div>
+      <div class="item-actions">
+        <span class="badge badge-yellow">${reviewCount} rev</span>
+        <button class="btn btn-ghost btn-xs" onclick="editTarget(${i})">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteTarget(${i})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAddTarget() {
+  editTgtIdx = -1;
+  document.getElementById('targetModalTitle').textContent = '🎯 Add Target';
+  document.getElementById('tgtLink').value  = '';
+  document.getElementById('tgtCount').value = '1';
+  document.getElementById('reviewVariants').innerHTML = '';
+  addReviewVariant();
+  document.getElementById('targetModal').classList.add('open');
+}
+
+function editTarget(i) {
+  editTgtIdx = i;
+  const t = targets[i];
+  document.getElementById('targetModalTitle').textContent = '🎯 Edit Target';
+  document.getElementById('tgtLink').value  = t.search_query || '';
+  document.getElementById('tgtCount').value = t.review_count || 1;
+  document.getElementById('reviewVariants').innerHTML = '';
+  const reviews = t.reviews || (t.texts || []).map(tx => ({text:tx, stars:t.stars||5}));
+  if (reviews.length) {
+    reviews.forEach(rv => addReviewVariant(rv.text, rv.stars));
+  } else {
+    addReviewVariant();
+  }
+  document.getElementById('targetModal').classList.add('open');
+}
+
+let variantCount = 0;
+function addReviewVariant(text='', stars=5) {
+  variantCount++;
+  const wrap = document.getElementById('reviewVariants');
+  const div  = document.createElement('div');
+  div.className = 'review-item';
+  div.innerHTML = `
+    <div class="review-item-header">
+      <span class="review-num">Variant ${variantCount}</span>
+      <button class="remove-btn" onclick="this.closest('.review-item').remove()">✕</button>
+    </div>
+    <div class="star-row" data-stars="${stars}">
+      ${[1,2,3,4,5].map(n => `
+        <button class="star-btn ${n<=stars?'active':''}" onclick="setStar(this,${n})">★</button>
+      `).join('')}
+      <span class="star-label" style="font-size:12px;color:var(--muted);margin-left:4px;">${stars} Star${stars>1?'s':''}</span>
+    </div>
+    <textarea placeholder="Review text... {spin|variants|like|this} use kar sakte ho">${text}</textarea>
+  `;
+  wrap.appendChild(div);
+}
+
+function setStar(btn, n) {
+  const row = btn.closest('.star-row');
+  row.querySelectorAll('.star-btn').forEach((b, i) => {
+    b.classList.toggle('active', i < n);
+  });
+  row.dataset.stars = n;
+  row.querySelector('.star-label').textContent = n + ' Star' + (n>1?'s':'');
+}
+
+function saveTarget() {
+  const link = document.getElementById('tgtLink').value.trim();
+  if (!link) { toast('Business link daalo', 'err'); return; }
+  const count   = parseInt(document.getElementById('tgtCount').value) || 1;
+  const items   = document.querySelectorAll('#reviewVariants .review-item');
+  const reviews = [];
+  items.forEach(item => {
+    const text  = item.querySelector('textarea').value.trim();
+    const stars = parseInt(item.querySelector('.star-row').dataset.stars) || 5;
+    if (text) reviews.push({ text, stars });
+  });
+  if (!reviews.length) { toast('Kam se kam ek review text daalo', 'err'); return; }
+  const obj = {
+    place_id:     '',
+    search_query: link,
+    review_count: count,
+    reviews,
+    // backward compat for poster.py
+    stars: reviews[0].stars,
+    texts: reviews.map(r => r.text),
+  };
+  if (editTgtIdx === -1) targets.push(obj);
+  else targets[editTgtIdx] = obj;
+  renderTargets();
+  closeModal('targetModal');
+}
+
+function deleteTarget(i) { targets.splice(i,1); renderTargets(); }
+
+async function saveTargets() {
+  await fetch('/api/targets', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(targets)
+  });
+  toast('Targets saved');
+}
+
+// ═══════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  if (r.status === 401) return;
+  const d = await r.json();
+  document.getElementById('s_admin_user').value    = d.ADMIN_USER || '';
+  document.getElementById('s_admin_pass').value    = '';
+  document.getElementById('s_slow_mo').value       = d.SLOW_MO || '55';
+  document.getElementById('s_locale').value        = d.LOCALE || 'en-US';
+  document.getElementById('s_tz').value            = d.TZ || 'Asia/Karachi';
+  document.getElementById('s_headless').value      = d.HEADLESS || 'false';
+  document.getElementById('s_daily_limit').value   = d.DAILY_LIMIT_PER_ACCT || '2';
+  document.getElementById('s_gap_min').value       = d.GAP_MIN || '1200';
+  document.getElementById('s_gap_max').value       = d.GAP_MAX || '5400';
+  document.getElementById('s_max_retries').value   = d.MAX_RETRIES || '3';
+  document.getElementById('s_warmup').checked      = d.WARMUP_ENABLED !== 'false';
+}
+
+async function saveSettings() {
+  const adminPass = document.getElementById('s_admin_pass').value;
+  const data = {
+    ADMIN_USER:            document.getElementById('s_admin_user').value.trim(),
+    SLOW_MO:               document.getElementById('s_slow_mo').value,
+    LOCALE:                document.getElementById('s_locale').value.trim(),
+    TZ:                    document.getElementById('s_tz').value.trim(),
+    HEADLESS:              document.getElementById('s_headless').value,
+    DAILY_LIMIT_PER_ACCT: document.getElementById('s_daily_limit').value,
+    GAP_MIN:               document.getElementById('s_gap_min').value,
+    GAP_MAX:               document.getElementById('s_gap_max').value,
+    MAX_RETRIES:           document.getElementById('s_max_retries').value,
+    WARMUP_ENABLED:        document.getElementById('s_warmup').checked ? 'true' : 'false',
+  };
+  if (adminPass) data.ADMIN_PASS = adminPass;
+  const r = await fetch('/api/settings', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+  });
+  const d = await r.json();
+  if (d.ok) toast('Settings saved — poster restart karo');
+  else      toast('Save failed', 'err');
+}
+
+// ═══════════════════════════════════════════════
+//  MODALS
+// ═══════════════════════════════════════════════
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  variantCount = 0;
+}
+document.querySelectorAll('.modal-bg').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) { m.classList.remove('open'); variantCount=0; }});
+});
+</script>
+</body>
+</html>
