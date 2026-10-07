@@ -439,77 +439,157 @@ def is_logged_in(ctx) -> bool:
             pass
 
 
+def _screenshot(page, name: str):
+    """Save debug screenshot to logs dir."""
+    try:
+        path = str(LOGS / f"{name}.png")
+        page.screenshot(path=path, full_page=True)
+        log.info("screenshot saved: %s", path)
+    except Exception as e:
+        log.warning("screenshot failed: %s", e)
+
+
+def _dismiss_consent(page):
+    """Dismiss cookie/consent popups if present."""
+    for txt in ("Accept all", "I agree", "Accept", "Reject all", "Got it"):
+        try:
+            btn = page.query_selector(f'button:has-text("{txt}")')
+            if btn and btn.is_visible():
+                human_click(page, btn)
+                delay(1.0, 2.0)
+                return
+        except Exception:
+            pass
+
+
+def _wait_for_any(page, selectors: list, timeout: int = 20000):
+    """Wait for any of the given selectors, return (selector, element) first found."""
+    deadline = time.time() + timeout / 1000
+    while time.time() < deadline:
+        for sel in selectors:
+            try:
+                el = page.query_selector(sel)
+                if el and el.is_visible():
+                    return sel, el
+            except Exception:
+                pass
+        time.sleep(0.4)
+    return None, None
+
+
 def auto_login(page, acct: Account) -> bool:
     """Full automated Google login — email → password → 2FA if totp set."""
     log.info("%s: auto-login starting...", acct.email)
     try:
-        page.goto("https://accounts.google.com/signin/v2/identifier", wait_until="domcontentloaded", timeout=30000)
-        delay(1.5, 3.0)
+        page.goto(
+            "https://accounts.google.com/ServiceLogin?hl=en",
+            wait_until="networkidle",
+            timeout=40000,
+        )
+        delay(2.0, 3.5)
+        _dismiss_consent(page)
+        delay(1.0, 2.0)
+
+        log.info("%s: login page url: %s", acct.email, page.url)
+        _screenshot(page, f"login_01_{acct.email.split('@')[0]}")
 
         # ── EMAIL ──
-        email_sel = 'input[type="email"]'
-        page.wait_for_selector(email_sel, timeout=15000)
-        human_type(page, page.query_selector(email_sel), acct.email)
+        EMAIL_SELS = [
+            'input[type="email"]',
+            'input[name="identifier"]',
+            '#identifierId',
+            'input[autocomplete="username"]',
+        ]
+        sel, email_el = _wait_for_any(page, EMAIL_SELS, timeout=20000)
+        if not email_el:
+            log.error("%s: email input not found. title: %s", acct.email, page.title())
+            _screenshot(page, f"login_fail_noemail_{acct.email.split('@')[0]}")
+            return False
+
+        log.info("%s: email input found via: %s", acct.email, sel)
+        email_el.click()
+        delay(0.5, 1.0)
+        human_type(page, email_el, acct.email)
         delay(0.8, 1.5)
 
-        next_btn = page.query_selector('#identifierNext button, button:has-text("Next")')
-        if next_btn:
-            human_click(page, next_btn)
-        else:
-            page.keyboard.press("Enter")
-        delay(2.0, 3.5)
-
-        # ── PASSWORD ──
-        pass_sel = 'input[type="password"]'
-        page.wait_for_selector(pass_sel, timeout=15000)
-        delay(0.8, 1.5)
-        human_type(page, page.query_selector(pass_sel), acct.password)
-        delay(0.8, 1.5)
-
-        pass_next = page.query_selector('#passwordNext button, button:has-text("Next")')
-        if pass_next:
-            human_click(page, pass_next)
+        NEXT_SELS = ['#identifierNext', '[jsname="LgbsSe"]', 'button:has-text("Next")']
+        _, next_el = _wait_for_any(page, NEXT_SELS, timeout=5000)
+        if next_el:
+            human_click(page, next_el)
         else:
             page.keyboard.press("Enter")
         delay(3.0, 5.0)
 
-        # ── 2FA / APP PASSWORD ──
-        # If totp (app password) is set, use it when prompted
+        log.info("%s: after email — url: %s", acct.email, page.url)
+        _screenshot(page, f"login_03_{acct.email.split('@')[0]}")
+
+        # ── PASSWORD ──
+        PASS_SELS = [
+            'input[type="password"]',
+            'input[name="password"]',
+            'input[autocomplete="current-password"]',
+        ]
+        sel, pass_el = _wait_for_any(page, PASS_SELS, timeout=20000)
+        if not pass_el:
+            log.error("%s: password input not found. url: %s", acct.email, page.url)
+            _screenshot(page, f"login_fail_nopass_{acct.email.split('@')[0]}")
+            return False
+
+        log.info("%s: password input found via: %s", acct.email, sel)
+        delay(0.8, 1.5)
+        human_type(page, pass_el, acct.password)
+        delay(0.8, 1.5)
+
+        PASSNEXT_SELS = ['#passwordNext', '[jsname="LgbsSe"]', 'button:has-text("Next")']
+        _, passnext_el = _wait_for_any(page, PASSNEXT_SELS, timeout=5000)
+        if passnext_el:
+            human_click(page, passnext_el)
+        else:
+            page.keyboard.press("Enter")
+        delay(4.0, 6.0)
+
+        log.info("%s: after password — url: %s", acct.email, page.url)
+        _screenshot(page, f"login_05_{acct.email.split('@')[0]}")
+
+        # ── 2FA / OTP ──
         if acct.totp:
-            try:
-                # Google may show an OTP / backup code / app-password prompt
-                otp_sel = 'input[type="tel"], input[type="text"][autocomplete="one-time-code"], input#totpPin'
-                page.wait_for_selector(otp_sel, timeout=8000)
+            OTP_SELS = [
+                'input[type="tel"]',
+                'input[name="totpPin"]',
+                'input[autocomplete="one-time-code"]',
+                'input[type="text"][jsname]',
+            ]
+            _, otp_el = _wait_for_any(page, OTP_SELS, timeout=8000)
+            if otp_el:
                 delay(0.8, 1.5)
-                human_type(page, page.query_selector(otp_sel), acct.totp)
+                human_type(page, otp_el, acct.totp)
                 delay(0.8, 1.5)
-                otp_next = page.query_selector('button:has-text("Next"), button:has-text("Verify")')
+                _, otp_next = _wait_for_any(page, ['button:has-text("Next")', 'button:has-text("Verify")'], timeout=4000)
                 if otp_next:
                     human_click(page, otp_next)
                 else:
                     page.keyboard.press("Enter")
                 delay(3.0, 5.0)
                 log.info("%s: 2FA code entered", acct.email)
-            except PWTimeout:
-                # No 2FA prompt — already past it or not required this session
-                log.info("%s: no 2FA prompt (profile may be warm)", acct.email)
+            else:
+                log.info("%s: no 2FA prompt (session warm or not required)", acct.email)
 
         # ── VERIFY ──
         delay(2.0, 3.0)
-        if "myaccount.google.com" in page.url or "google.com" in page.url and "accounts.google.com" not in page.url:
+        final_url = page.url
+        log.info("%s: final url: %s", acct.email, final_url)
+        _screenshot(page, f"login_06_final_{acct.email.split('@')[0]}")
+
+        if "accounts.google.com" not in final_url:
             log.info("%s: auto-login SUCCESS", acct.email)
             return True
 
-        # Check if still on accounts page (wrong password / blocked)
-        if "accounts.google.com" in page.url:
-            log.error("%s: auto-login FAILED — still on accounts page", acct.email)
-            return False
-
-        log.info("%s: auto-login likely OK (url: %s)", acct.email, page.url)
-        return True
+        log.error("%s: auto-login FAILED — still on: %s", acct.email, final_url)
+        return False
 
     except Exception as e:
         log.error("%s: auto-login crash: %s", acct.email, e)
+        _screenshot(page, f"login_crash_{acct.email.split('@')[0]}")
         return False
 
 # ============ WARM-UP BROWSING ============
