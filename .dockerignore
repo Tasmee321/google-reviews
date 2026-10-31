@@ -1,0 +1,13 @@
+.env
+env
+download
+accounts.json
+targets.json
+state.json
+logs
+profiles
+personal_data
+backups
+test-results
+__pycache__
+.git

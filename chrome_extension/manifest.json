@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Tasmee Personal Reviews",
+  "version": "1.0.6",
+  "description": "Connect your local dashboard with your own signed-in Google Maps browser.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.google.com/*", "https://google.com/*", "https://maps.google.com/*", "https://www.google.co.uk/*", "https://www.google.com.pk/*", "http://127.0.0.1/*", "http://localhost/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_popup": "popup.html"},
+  "content_scripts": [
+    {"matches": ["http://127.0.0.1/*", "http://localhost/*"], "js": ["dashboard.js"], "run_at": "document_start"},
+    {"matches": ["https://www.google.com/maps*", "https://google.com/maps*", "https://maps.google.com/*", "https://www.google.co.uk/maps*", "https://www.google.com.pk/maps*"], "js": ["google.js"], "run_at": "document_idle"},
+    {"matches": ["https://www.google.com/maps/api/js/ReviewsService.LoadWriteWidget*", "https://google.com/maps/api/js/ReviewsService.LoadWriteWidget*", "https://www.google.co.uk/maps/api/js/ReviewsService.LoadWriteWidget*", "https://www.google.com.pk/maps/api/js/ReviewsService.LoadWriteWidget*"], "js": ["review_widget.js"], "all_frames": true, "run_at": "document_idle"}
+  ]
+}

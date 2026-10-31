@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.env
+env
+download
+accounts.json
+targets.json
+state.json
+logs/
+profiles/
+personal_data/
+backups/
+test-results/
+firefox_extension/
+dist/
+.venv/
+node_modules/

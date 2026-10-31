@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "project": {
+    "name": "Tasmee Personal Reviews",
+    "productType": "Personal review dashboard",
+    "stack": [
+      "Flask",
+      "Jinja",
+      "HTML",
+      "CSS",
+      "JavaScript"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "static/app.css"
+    ],
+    "components": [
+      "templates/index.html",
+      "static/app.js"
+    ],
+    "assets": [],
+    "instructions": []
+  },
+  "design": {
+    "colorMode": "dark",
+    "colors": {},
+    "typography": {},
+    "spacing": {},
+    "radius": {},
+    "shadows": {},
+    "motion": {},
+    "density": "compact"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [],
+    "avoid": []
+  },
+  "decisions": [],
+  "evidence": [],
+  "generatedAt": "2026-10-31T10:28:39.857Z"
+}
