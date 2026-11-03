@@ -1,3 +1,4 @@
+# browser_bridge.py
 """Use the person's ordinary Chrome session through a narrowly scoped extension."""
 import os
 import shutil
@@ -32,8 +33,9 @@ class BrowserBridge:
     extension_mode = True
     ACTION_TIMEOUT = 180
 
-    def __init__(self, store):
+    def __init__(self, store, cfg=None):
         self.store = store
+        self.cfg = cfg or {}
         self.browser_kind = browser_kind()
         self.browser_label = "Firefox" if self.browser_kind == "firefox" else "Chrome"
         self._lock = threading.RLock()
