@@ -50,6 +50,9 @@ def main(argv=None):
             with (ROOT / "config.json").open("x", encoding="utf-8") as output:
                 output.write((ROOT / "config.example.json").read_text(encoding="utf-8"))
         cfg = load_config(ROOT / "config.json")
+        if cfg["city_geolocation"]:
+            from city_location import load_city_locations
+            load_city_locations(ROOT)
         cities = json.loads((ROOT / "uk_cities.json").read_text(encoding="utf-8"))
         if (not isinstance(cities, dict) or set(cities) != {"England", "Scotland", "Wales", "Northern Ireland"}
                 or any(not isinstance(names, list) or not names

@@ -1,0 +1,391 @@
+{
+  "source": "OpenStreetMap via Nominatim",
+  "source_url": "https://nominatim.openstreetmap.org/",
+  "attribution": "© OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "license_url": "https://www.openstreetmap.org/copyright",
+  "retrieved_on": "2026-11-03",
+  "description": "Representative city or city-area points; not precise device or business locations.",
+  "locations": {
+    "Bath, England, United Kingdom": {
+      "latitude": 51.381386,
+      "longitude": -2.359696,
+      "osm_url": "https://www.openstreetmap.org/relation/5342409"
+    },
+    "Birmingham, England, United Kingdom": {
+      "latitude": 52.479699,
+      "longitude": -1.902691,
+      "osm_url": "https://www.openstreetmap.org/node/17861291"
+    },
+    "Bradford, England, United Kingdom": {
+      "latitude": 53.794423,
+      "longitude": -1.751919,
+      "osm_url": "https://www.openstreetmap.org/node/26701367"
+    },
+    "Brighton & Hove, England, United Kingdom": {
+      "latitude": 50.845413,
+      "longitude": -0.149724,
+      "osm_url": "https://www.openstreetmap.org/relation/114085"
+    },
+    "Bristol, England, United Kingdom": {
+      "latitude": 51.453802,
+      "longitude": -2.597298,
+      "osm_url": "https://www.openstreetmap.org/relation/5746665"
+    },
+    "Cambridge, England, United Kingdom": {
+      "latitude": 52.205531,
+      "longitude": 0.118664,
+      "osm_url": "https://www.openstreetmap.org/node/20971094"
+    },
+    "Canterbury, England, United Kingdom": {
+      "latitude": 51.280028,
+      "longitude": 1.080253,
+      "osm_url": "https://www.openstreetmap.org/node/17916174"
+    },
+    "Carlisle, England, United Kingdom": {
+      "latitude": 54.894848,
+      "longitude": -2.936231,
+      "osm_url": "https://www.openstreetmap.org/relation/19668579"
+    },
+    "Chelmsford, England, United Kingdom": {
+      "latitude": 51.734533,
+      "longitude": 0.473053,
+      "osm_url": "https://www.openstreetmap.org/node/21025675"
+    },
+    "Chester, England, United Kingdom": {
+      "latitude": 53.190887,
+      "longitude": -2.890896,
+      "osm_url": "https://www.openstreetmap.org/node/8087537"
+    },
+    "Chichester, England, United Kingdom": {
+      "latitude": 50.836486,
+      "longitude": -0.779172,
+      "osm_url": "https://www.openstreetmap.org/relation/2991708"
+    },
+    "Colchester, England, United Kingdom": {
+      "latitude": 51.88969,
+      "longitude": 0.899465,
+      "osm_url": "https://www.openstreetmap.org/node/21503243"
+    },
+    "Coventry, England, United Kingdom": {
+      "latitude": 52.408181,
+      "longitude": -1.510477,
+      "osm_url": "https://www.openstreetmap.org/node/17859918"
+    },
+    "Derby, England, United Kingdom": {
+      "latitude": 52.923301,
+      "longitude": -1.476549,
+      "osm_url": "https://www.openstreetmap.org/node/21904579"
+    },
+    "Doncaster, England, United Kingdom": {
+      "latitude": 53.522768,
+      "longitude": -1.133531,
+      "osm_url": "https://www.openstreetmap.org/relation/106961"
+    },
+    "Durham, England, United Kingdom": {
+      "latitude": 54.777014,
+      "longitude": -1.575621,
+      "osm_url": "https://www.openstreetmap.org/node/21181736"
+    },
+    "Ely, England, United Kingdom": {
+      "latitude": 52.39902,
+      "longitude": 0.262039,
+      "osm_url": "https://www.openstreetmap.org/relation/1609357"
+    },
+    "Exeter, England, United Kingdom": {
+      "latitude": 50.725614,
+      "longitude": -3.526921,
+      "osm_url": "https://www.openstreetmap.org/relation/2154556"
+    },
+    "Gloucester, England, United Kingdom": {
+      "latitude": 51.86537,
+      "longitude": -2.245819,
+      "osm_url": "https://www.openstreetmap.org/node/17857512"
+    },
+    "Hereford, England, United Kingdom": {
+      "latitude": 52.055381,
+      "longitude": -2.715174,
+      "osm_url": "https://www.openstreetmap.org/relation/6137325"
+    },
+    "Kingston-upon-Hull, England, United Kingdom": {
+      "latitude": 53.743572,
+      "longitude": -0.339476,
+      "osm_url": "https://www.openstreetmap.org/node/26701158"
+    },
+    "Lancaster, England, United Kingdom": {
+      "latitude": 54.048822,
+      "longitude": -2.80135,
+      "osm_url": "https://www.openstreetmap.org/node/26700976"
+    },
+    "Leeds, England, United Kingdom": {
+      "latitude": 53.797418,
+      "longitude": -1.543794,
+      "osm_url": "https://www.openstreetmap.org/node/358309"
+    },
+    "Leicester, England, United Kingdom": {
+      "latitude": 52.6362,
+      "longitude": -1.133197,
+      "osm_url": "https://www.openstreetmap.org/node/10021976"
+    },
+    "Lichfield, England, United Kingdom": {
+      "latitude": 52.68437,
+      "longitude": -1.827529,
+      "osm_url": "https://www.openstreetmap.org/relation/168501"
+    },
+    "Lincoln, England, United Kingdom": {
+      "latitude": 53.229354,
+      "longitude": -0.540482,
+      "osm_url": "https://www.openstreetmap.org/node/10671639"
+    },
+    "Liverpool, England, United Kingdom": {
+      "latitude": 53.407199,
+      "longitude": -2.99168,
+      "osm_url": "https://www.openstreetmap.org/node/21421501"
+    },
+    "London, England, United Kingdom": {
+      "latitude": 51.507446,
+      "longitude": -0.127765,
+      "osm_url": "https://www.openstreetmap.org/relation/175342"
+    },
+    "Manchester, England, United Kingdom": {
+      "latitude": 53.479489,
+      "longitude": -2.245115,
+      "osm_url": "https://www.openstreetmap.org/node/294001443"
+    },
+    "Milton Keynes, England, United Kingdom": {
+      "latitude": 52.04065,
+      "longitude": -0.759409,
+      "osm_url": "https://www.openstreetmap.org/relation/14186936"
+    },
+    "Newcastle-upon-Tyne, England, United Kingdom": {
+      "latitude": 54.973847,
+      "longitude": -1.613157,
+      "osm_url": "https://www.openstreetmap.org/relation/142282"
+    },
+    "Norwich, England, United Kingdom": {
+      "latitude": 52.628558,
+      "longitude": 1.292395,
+      "osm_url": "https://www.openstreetmap.org/relation/172506"
+    },
+    "Nottingham, England, United Kingdom": {
+      "latitude": 52.953419,
+      "longitude": -1.149646,
+      "osm_url": "https://www.openstreetmap.org/relation/123292"
+    },
+    "Oxford, England, United Kingdom": {
+      "latitude": 51.752013,
+      "longitude": -1.25785,
+      "osm_url": "https://www.openstreetmap.org/relation/394037"
+    },
+    "Peterborough, England, United Kingdom": {
+      "latitude": 52.572577,
+      "longitude": -0.242734,
+      "osm_url": "https://www.openstreetmap.org/node/17951258"
+    },
+    "Plymouth, England, United Kingdom": {
+      "latitude": 50.371412,
+      "longitude": -4.142445,
+      "osm_url": "https://www.openstreetmap.org/relation/189924"
+    },
+    "Portsmouth, England, United Kingdom": {
+      "latitude": 50.800031,
+      "longitude": -1.090602,
+      "osm_url": "https://www.openstreetmap.org/relation/127167"
+    },
+    "Preston, England, United Kingdom": {
+      "latitude": 53.759336,
+      "longitude": -2.699272,
+      "osm_url": "https://www.openstreetmap.org/node/21436318"
+    },
+    "Ripon, England, United Kingdom": {
+      "latitude": 54.136217,
+      "longitude": -1.523801,
+      "osm_url": "https://www.openstreetmap.org/relation/7654556"
+    },
+    "Salford, England, United Kingdom": {
+      "latitude": 53.487746,
+      "longitude": -2.289192,
+      "osm_url": "https://www.openstreetmap.org/node/26867312"
+    },
+    "Salisbury, England, United Kingdom": {
+      "latitude": 51.069061,
+      "longitude": -1.795413,
+      "osm_url": "https://www.openstreetmap.org/relation/3404205"
+    },
+    "Sheffield, England, United Kingdom": {
+      "latitude": 53.380663,
+      "longitude": -1.470228,
+      "osm_url": "https://www.openstreetmap.org/relation/106956"
+    },
+    "Southampton, England, United Kingdom": {
+      "latitude": 50.902535,
+      "longitude": -1.404189,
+      "osm_url": "https://www.openstreetmap.org/relation/127864"
+    },
+    "Southend-on-Sea, England, United Kingdom": {
+      "latitude": 51.538824,
+      "longitude": 0.712814,
+      "osm_url": "https://www.openstreetmap.org/relation/76489"
+    },
+    "St Albans, England, United Kingdom": {
+      "latitude": 51.753051,
+      "longitude": -0.337967,
+      "osm_url": "https://www.openstreetmap.org/relation/13948853"
+    },
+    "Stoke on Trent, England, United Kingdom": {
+      "latitude": 53.016201,
+      "longitude": -2.181261,
+      "osm_url": "https://www.openstreetmap.org/relation/163183"
+    },
+    "Sunderland, England, United Kingdom": {
+      "latitude": 54.905851,
+      "longitude": -1.382873,
+      "osm_url": "https://www.openstreetmap.org/node/20959520"
+    },
+    "Truro, England, United Kingdom": {
+      "latitude": 50.263317,
+      "longitude": -5.051811,
+      "osm_url": "https://www.openstreetmap.org/relation/5821558"
+    },
+    "Wakefield, England, United Kingdom": {
+      "latitude": 53.682954,
+      "longitude": -1.496729,
+      "osm_url": "https://www.openstreetmap.org/node/21027566"
+    },
+    "Wells, England, United Kingdom": {
+      "latitude": 51.209451,
+      "longitude": -2.64512,
+      "osm_url": "https://www.openstreetmap.org/relation/2922198"
+    },
+    "Westminster, England, United Kingdom": {
+      "latitude": 51.497321,
+      "longitude": -0.137149,
+      "osm_url": "https://www.openstreetmap.org/relation/51781"
+    },
+    "Winchester, England, United Kingdom": {
+      "latitude": 51.061277,
+      "longitude": -1.313169,
+      "osm_url": "https://www.openstreetmap.org/node/1610961669"
+    },
+    "Wolverhampton, England, United Kingdom": {
+      "latitude": 52.584765,
+      "longitude": -2.127567,
+      "osm_url": "https://www.openstreetmap.org/relation/173722"
+    },
+    "Worcester, England, United Kingdom": {
+      "latitude": 52.191185,
+      "longitude": -2.220658,
+      "osm_url": "https://www.openstreetmap.org/node/20971097"
+    },
+    "York, England, United Kingdom": {
+      "latitude": 53.959055,
+      "longitude": -1.081536,
+      "osm_url": "https://www.openstreetmap.org/node/20913294"
+    },
+    "Aberdeen, Scotland, United Kingdom": {
+      "latitude": 57.148243,
+      "longitude": -2.092809,
+      "osm_url": "https://www.openstreetmap.org/relation/1900654"
+    },
+    "Dundee, Scotland, United Kingdom": {
+      "latitude": 56.460594,
+      "longitude": -2.97019,
+      "osm_url": "https://www.openstreetmap.org/node/21262495"
+    },
+    "Dunfermline, Scotland, United Kingdom": {
+      "latitude": 56.071372,
+      "longitude": -3.461618,
+      "osm_url": "https://www.openstreetmap.org/relation/14164364"
+    },
+    "Edinburgh, Scotland, United Kingdom": {
+      "latitude": 55.953346,
+      "longitude": -3.188375,
+      "osm_url": "https://www.openstreetmap.org/relation/1920901"
+    },
+    "Glasgow, Scotland, United Kingdom": {
+      "latitude": 55.861155,
+      "longitude": -4.250169,
+      "osm_url": "https://www.openstreetmap.org/node/11127374"
+    },
+    "Inverness, Scotland, United Kingdom": {
+      "latitude": 57.479012,
+      "longitude": -4.225739,
+      "osm_url": "https://www.openstreetmap.org/node/21063119"
+    },
+    "Perth, Scotland, United Kingdom": {
+      "latitude": 56.395876,
+      "longitude": -3.43031,
+      "osm_url": "https://www.openstreetmap.org/node/21262494"
+    },
+    "Stirling, Scotland, United Kingdom": {
+      "latitude": 56.118124,
+      "longitude": -3.936001,
+      "osm_url": "https://www.openstreetmap.org/node/21091709"
+    },
+    "Bangor, Wales, United Kingdom": {
+      "latitude": 53.227716,
+      "longitude": -4.126882,
+      "osm_url": "https://www.openstreetmap.org/relation/11241684"
+    },
+    "Cardiff, Wales, United Kingdom": {
+      "latitude": 51.481655,
+      "longitude": -3.179193,
+      "osm_url": "https://www.openstreetmap.org/node/738885245"
+    },
+    "Newport, Wales, United Kingdom": {
+      "latitude": 51.588233,
+      "longitude": -2.997497,
+      "osm_url": "https://www.openstreetmap.org/node/26700977"
+    },
+    "St Asaph, Wales, United Kingdom": {
+      "latitude": 53.257561,
+      "longitude": -3.443861,
+      "osm_url": "https://www.openstreetmap.org/node/27459584"
+    },
+    "St Davids, Wales, United Kingdom": {
+      "latitude": 51.88106,
+      "longitude": -5.265848,
+      "osm_url": "https://www.openstreetmap.org/node/3712052604"
+    },
+    "Swansea, Wales, United Kingdom": {
+      "latitude": 51.619596,
+      "longitude": -3.945925,
+      "osm_url": "https://www.openstreetmap.org/node/21063632"
+    },
+    "Wrexham, Wales, United Kingdom": {
+      "latitude": 53.046508,
+      "longitude": -2.993787,
+      "osm_url": "https://www.openstreetmap.org/node/315038255"
+    },
+    "Armagh, Northern Ireland, United Kingdom": {
+      "latitude": 54.348198,
+      "longitude": -6.654043,
+      "osm_url": "https://www.openstreetmap.org/node/267763062"
+    },
+    "Bangor, Northern Ireland, United Kingdom": {
+      "latitude": 54.662595,
+      "longitude": -5.667913,
+      "osm_url": "https://www.openstreetmap.org/node/267762683"
+    },
+    "Belfast, Northern Ireland, United Kingdom": {
+      "latitude": 54.596391,
+      "longitude": -5.930183,
+      "osm_url": "https://www.openstreetmap.org/relation/19414244"
+    },
+    "Lisburn, Northern Ireland, United Kingdom": {
+      "latitude": 54.511286,
+      "longitude": -6.046717,
+      "osm_url": "https://www.openstreetmap.org/node/1460517034"
+    },
+    "Londonderry, Northern Ireland, United Kingdom": {
+      "latitude": 54.997868,
+      "longitude": -7.321306,
+      "osm_url": "https://www.openstreetmap.org/node/267762522"
+    },
+    "Newry, Northern Ireland, United Kingdom": {
+      "latitude": 54.177528,
+      "longitude": -6.337506,
+      "osm_url": "https://www.openstreetmap.org/node/663428001"
+    }
+  }
+}

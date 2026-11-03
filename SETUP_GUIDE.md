@@ -57,8 +57,9 @@ an error instead of silently selecting another mode.
 | `browser_channel` | `chrome` | Installed Chrome; `msedge` for Edge; `chromium` for Playwright's browser. |
 | `locale` | `en-GB` | Browser language; Google form selectors currently expect English. |
 | `device` | `null` | Desktop; an optional exact Playwright device name enables that descriptor. |
+| `city_geolocation` | `true` | A selected UK city sets the poster browser's reported coordinates. Set `false` for search-only city selection. |
 | `proxies` | `[]` | Must stay empty for this Avast-based setup. |
-| `target.lat`, `target.lng` | `null` | No coordinate override. City selection never writes these values. |
+| `target.lat`, `target.lng` | `null` | Optional manual fallback when no city is selected. City selection overrides them for the current server session without rewriting config. |
 | `target.timezone` | `Europe/London` | UK browser timezone, including seasonal GMT/BST changes. |
 | `delay_range` | `[0, 0]` | Optional bounded pacing in seconds; maximum 10. |
 | `timeouts.navigation_ms` | `45000` | Navigation timeout; allowed 1000–60000 ms. |
@@ -93,9 +94,38 @@ included. This is a city list, not a list of every UK town or borough.
 
 For a business-name search the selected city and nation are appended to the
 query. **All United Kingdom** adds UK context without choosing a city. A complete
-Google Maps URL is passed unchanged. The picker does not set device coordinates,
-spoof a visit, select a random branch or switch the VPN. Check the resolved
-business name/address before posting.
+Google Maps URL is passed unchanged. In poster mode, selecting a city also applies
+its approximate coordinates to the browser Geolocation API. It does not change
+the device's system-wide location, the public IP, the Avast server, or the selected
+business. Check the resolved business name/address before posting.
+
+## Automatic city location
+
+`city_geolocation` is enabled in the supplied config. **Choose London → browser
+reports the London point; choose Manchester → browser reports the Manchester
+point.** No manual coordinate entry, API key or proxy is needed.
+
+- The status under the city picker shows ON/OFF and the selected location.
+- Choose the city before Google sign-in if it must apply from the first poster
+  browser session. Choosing it does not itself launch a browser or sign in.
+- An already-open poster browser updates in place; no restart is needed per city.
+- Location changes are blocked during active reviews or other browser operations.
+- **All United Kingdom** clears the city override and its application-granted
+  geolocation permissions. If manual `target.lat/lng` exist, those are restored;
+  with the supplied null values, no simulated position is available.
+- Dashboard refresh and a successful post keep the selected city. A server restart
+  clears the session selection; choose the city again, or configure a fixed manual fallback.
+- Geolocation permission is granted only for supported Google origins, not every
+  website. This applies to the dedicated poster browser, not personal browser tabs.
+- Optional Chrome/Firefox extension modes remain search-only; this feature requires poster mode.
+
+The offline coordinates in `uk_city_locations.json` are representative city/area
+points, not precise addresses or device positions. Source: **© OpenStreetMap
+contributors**, obtained through Nominatim on **3 November 2026**, licensed under
+[ODbL 1.0](https://www.openstreetmap.org/copyright). Each point includes its OSM
+source URL. Preserve the attribution when redistributing the coordinate dataset.
+No geocoding call happens when you choose a city. Neither geolocation emulation
+nor a UK VPN exit hides the identity of a signed-in Google account.
 
 ## Sign-in, review and account switching
 

@@ -9,8 +9,10 @@ from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
 
 from app import create_app
-from browser_options import launch_options
+from city_location import apply_browser_location, load_city_locations
 from poster import ReviewWorker
+from review_store import ReviewStore
+from app_config import validate_config
 from test_normal_chrome import GOOGLE, RADIOS, SAVED_CARD, WIDGET, WIDGET_RADIOS, WIDGET_URL
 
 TEXT = "My genuine visit.\nThe staff were helpful."
@@ -39,12 +41,29 @@ class InterceptedWorker(ReviewWorker):
         if self._context is not None:
             return
         self._playwright = sync_playwright().start()
-        options = launch_options(self.cfg, self._playwright.devices)
+        options = self.browser_launch_options()
         options["headless"] = True
         self._context = self._playwright.chromium.launch_persistent_context(
             str(self.store.directory / "fixture-browser"), **options)
         self._context.set_default_timeout(5000)
+        apply_browser_location(self._context, self.snapshot()["location"])
         self._context.route("**/*", self._route)
+
+    def _resolve(self, request):
+        if request[0] != "fixture:geolocation":
+            return super()._resolve(request)
+        page = self._new_page()
+        try:
+            page.goto("https://www.google.com/maps?fixture=geolocation")
+            return page.evaluate("""async () => {
+              const permission = (await navigator.permissions.query({name:'geolocation'})).state;
+              if(permission !== 'granted') return {permission};
+              return await new Promise((resolve,reject) => navigator.geolocation.getCurrentPosition(
+                position => resolve({permission, latitude:position.coords.latitude, longitude:position.coords.longitude}),
+                error => reject(new Error(error.message)), {timeout:3000}));
+            }""")
+        finally:
+            page.close()
 
     def _route(self, route):
         parsed = urlsplit(route.request.url)
@@ -161,6 +180,74 @@ class PosterIntegrationTests(unittest.TestCase):
         self.page.screenshot(path=str(folder / "poster-uk-desktop.png"), full_page=True)
         self.page.set_viewport_size({"width": 375, "height": 1000})
         self.page.screenshot(path=str(folder / "poster-uk-mobile.png"), full_page=True)
+        self.assertEqual(self.errors, [])
+
+    def test_city_change_updates_real_browser_coordinates_and_survives_refresh(self):
+        city = "Manchester, England, United Kingdom"
+        self.page.locator("#searchCity").select_option(city)
+        self.page.wait_for_function("() => document.querySelector('#cityLocation').textContent.includes('ON: Manchester')")
+        actual = self.worker.command("resolve", ("fixture:geolocation", ""), wait=True)
+        expected = load_city_locations()[city]
+        self.assertEqual(actual["permission"], "granted")
+        self.assertAlmostEqual(actual["latitude"], expected["latitude"])
+        self.assertAlmostEqual(actual["longitude"], expected["longitude"])
+        self.page.reload()
+        self.page.wait_for_function("() => document.querySelector('#searchCity').value.startsWith('Manchester')")
+        self.assertEqual(self.page.locator("#searchCity").input_value(), city)
+        self.page.locator("#searchCity").select_option("")
+        self.page.wait_for_function("() => document.querySelector('#cityLocation').textContent.includes('OFF')")
+        cleared = self.worker.command("resolve", ("fixture:geolocation", ""), wait=True)
+        self.assertNotEqual(cleared["permission"], "granted")
+        self.assertEqual(self.worker.submissions, 0)
+        self.assertEqual(self.errors, [])
+
+    def test_city_selected_before_browser_launch_is_applied_on_first_page(self):
+        with tempfile.TemporaryDirectory() as folder:
+            worker = InterceptedWorker(ReviewStore(folder), validate_config({}))
+            try:
+                city = "London, England, United Kingdom"
+                worker.set_city_location(city)
+                self.assertIsNone(worker._context)
+                actual = worker.command("resolve", ("fixture:geolocation", ""), wait=True)
+                self.assertEqual(actual["permission"], "granted")
+                self.assertAlmostEqual(actual["latitude"], load_city_locations()[city]["latitude"])
+                self.assertAlmostEqual(actual["longitude"], load_city_locations()[city]["longitude"])
+            finally:
+                worker.close()
+
+    def test_city_poll_keeps_inflight_selection_but_accepts_server_revision_reset(self):
+        self.page.wait_for_function("() => !polling && !requesting")
+        result = self.page.evaluate("""async () => {
+          const originalApi = api;
+          const stale = await originalApi('/api/status');
+          let release;
+          try {
+            api = () => new Promise(resolve => {release = resolve;});
+            const pending = poll();
+            const selected = await originalApi('/api/browser/location', {
+              city: 'Manchester, England, United Kingdom'
+            });
+            browser.location = selected.location;
+            release(stale);
+            await pending;
+            const afterStale = {...browser.location};
+            // A fresh server has no city and starts its revision counter at zero.
+            const restarted = await originalApi('/api/status');
+            restarted.browser.location = {selection:'', source:'off', enabled:false,
+              revision:0, latitude:null, longitude:null};
+            api = async () => restarted;
+            await poll();
+            return {afterStale, afterRestart:browser.location,
+              selection:document.querySelector('#searchCity').value,
+              label:document.querySelector('#cityLocation').textContent};
+          } finally {api = originalApi;}
+        }""")
+        self.assertEqual(result['afterStale']['selection'], 'Manchester, England, United Kingdom')
+        self.assertTrue(result['afterStale']['enabled'])
+        self.assertFalse(result['afterRestart']['enabled'])
+        self.assertEqual(result['afterRestart']['revision'], 0)
+        self.assertEqual(result['selection'], '')
+        self.assertIn('OFF', result['label'])
         self.assertEqual(self.errors, [])
 
 

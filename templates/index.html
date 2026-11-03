@@ -27,14 +27,16 @@
         <div id="formErrors" class="error-summary" role="alert" tabindex="-1" hidden></div>
         <fieldset id="draftFields">
           <div class="field">
-            <label for="searchCity">UK city · business search</label>
-            <select id="searchCity" aria-describedby="cityHint">
+            <label for="searchCity">UK city · {{ 'search & browser location' if city_geolocation else 'business search' }}</label>
+            <select id="searchCity" aria-describedby="cityHint cityLocation" disabled>
               <option value="">All United Kingdom</option>
               {% for country, cities in uk_cities.items() %}
               <optgroup label="{{ country }}">{% for city in cities %}<option value="{{ city }}, {{ country }}, United Kingdom">{{ city }}</option>{% endfor %}</optgroup>
               {% endfor %}
             </select>
-            <p id="cityHint" class="hint">City business-name search ke liye hai. Google Maps links unchanged rehte hain; yeh VPN ya device location nahi badalta.</p>
+            <p id="cityHint" class="hint">{% if city_geolocation %}City choose karte hi poster browser us city ki approximate location report karega. IP aur Avast server nahi badlenge. Maps links unchanged rehte hain.{% else %}City business-name search ke liye hai. Google Maps links unchanged rehte hain; yeh VPN ya device location nahi badalta.{% endif %}</p>
+            <p id="cityLocation" class="hint" role="status" aria-live="polite" hidden></p>
+            {% if city_geolocation %}<p class="hint">City coordinates: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a>.</p>{% endif %}
           </div>
           <div class="field">
             <label for="target">Business link or search</label>

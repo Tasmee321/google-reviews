@@ -16,6 +16,7 @@ try {nextCheckAt=Math.max(nextCheckAt, Number(localStorage.getItem(cadenceKey)) 
 const storageKey = "tasmee.personal-review.draft.v1";
 let extensionInstalled=false, extensionChecked=false;
 let policyRequest=0;
+let changingCity=false, statusLoaded=false;
 
 function clearPolicyWarnings() {
   policyRequest++;
@@ -118,7 +119,9 @@ function saveDraft() {
   $("ratingDescription").textContent = selected ? ["","1 star · Poor","2 stars · Below expectations","3 stars · Average","4 stars · Good","5 stars · Excellent"][selected] : "Select a rating that reflects your visit.";
 }
 function clearComposer() {
+  const city=$("searchCity")?.value || "";
   $("reviewForm").reset();
+  if($("searchCity")) $("searchCity").value=city;
   for(const key of ["target","expected_name","text"]) $(key).value="";
   document.querySelectorAll('input[name="stars"]').forEach(node=>node.checked=false);
   try { localStorage.removeItem(storageKey); } catch {}
@@ -141,6 +144,7 @@ function controls() {
   const active=reviews.find(review=>activeStates.has(review.status));
   const locked=requesting || monitoring || Boolean(active);
   $("draftFields").disabled=locked;
+  if($("searchCity")) $("searchCity").disabled=!statusLoaded || locked || browser.busy;
   $("prepareButton").disabled=locked || browser.status!=="connected" || browser.busy;
   $("prepareButton").textContent=resolving ? "Fetching business…" : active && ["queued","preparing"].includes(active.status) ? "Preparing review…" : "Start →";
   $("connectButton").disabled=requesting || browser.busy || Boolean(active);
@@ -157,6 +161,20 @@ function controls() {
   $("cancelButton").disabled=requesting || (active?.status==="ready" && browser.busy);
   const capable=extensionCapabilities.includes("saved_checks");
   badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? (browser.transport==="poster" ? "Unavailable" : "Needs signed 1.0.6") : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
+  renderCityLocation();
+}
+function renderCityLocation(syncSelection=false) {
+  const node=$("cityLocation");if(!node) return;
+  const supported=browser.transport==="poster" && extensionCapabilities.includes("city_geolocation");
+  node.hidden=!supported;if(!supported) return;
+  const location=browser.location;
+  node.textContent=changingCity ? "Applying city location…" : location?.enabled ?
+    "Browser location ON: "+(location.selection || "coordinates from config")+". IP unchanged." :
+    "City location OFF. Choose a city to turn it on; IP stays controlled by Avast.";
+  if(syncSelection && !changingCity && $("searchCity").value!==(location?.selection || "")) {
+    $("searchCity").value=location?.selection || "";
+    invalidateBusiness();
+  }
 }
 function renderPreview() {
   const review=reviews.find(item=>item.id===selectedId) || resolvedBusiness;
@@ -269,13 +287,19 @@ async function poll() {
   if(polling || document.hidden) return;
   polling=true;
   try {
+    const locationAtRequest=browser.location;
     const result=await api("/api/status");
+    // Preserve only changes made during this request; a restarted server resets revisions.
+    if(browser.location && browser.location!==locationAtRequest && result.browser.location &&
+       browser.location.revision>result.browser.location.revision) result.browser.location=browser.location;
     browser=result.browser;
+    statusLoaded=true;
     if(browser.transport==="poster") extensionCapabilities=browser.capabilities || [];
     historyTotal=result.history_total || 0;accounts=result.accounts || [];businesses=result.businesses || [];
     // Retain explicitly loaded older pages, but refresh recent records from the server.
     const incoming=new Set(result.reviews.map(r=>r.id));
     reviews=[...result.reviews,...(historyExpanded ? reviews.filter(r=>!incoming.has(r.id)) : [])];
+    renderCityLocation(true);
     const completed=reviews.find(r=>r.id===draftReviewId && r.status==="posted");
     if(completed) {clearComposer();notice("Success: submission confirmed. Form cleared; details are saved in history. Public visibility remains unknown.");}
     if(browser.transport==="extension" && !extensionChecked) {
@@ -409,7 +433,22 @@ function invalidateBusiness() {
   if(!reviews.some(r=>activeStates.has(r.status))) {selectedId=null;renderPreview();}
 }
 $("target").addEventListener("input",invalidateBusiness);
-$("searchCity")?.addEventListener("change",invalidateBusiness);
+$("searchCity")?.addEventListener("change",async()=>{
+  invalidateBusiness();
+  if(browser.transport!=="poster" || !extensionCapabilities.includes("city_geolocation")) return;
+  if(requesting || monitoring || browser.busy || reviews.some(r=>activeStates.has(r.status))) {
+    renderCityLocation(true);return;
+  }
+  const city=$("searchCity").value;
+  changingCity=true;
+  try {
+    await action(async()=>{
+      const result=await api("/api/browser/location",{city});
+      browser.location=result.location;
+      notice(result.location.enabled ? "Browser location selected. It applies to the poster browser, not your IP or Avast server." : "City location override cleared. IP routing is unchanged.");
+    });
+  } finally {changingCity=false;renderCityLocation(true);controls();}
+});
 $("clearHistoryButton").addEventListener("click",()=>deleteLocal());
 $("historySearch").addEventListener("input",renderHistory);
 $("historyFilter").addEventListener("change",renderHistory);

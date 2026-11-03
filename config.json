@@ -4,6 +4,7 @@
   "browser_channel": "chrome",
   "locale": "en-GB",
   "device": null,
+  "city_geolocation": true,
   "proxies": [],
   "delay_range": [0, 0],
   "target": {

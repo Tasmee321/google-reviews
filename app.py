@@ -123,6 +123,7 @@ def create_app(data_dir=None, worker_factory=None, config=None):
         return render_template("index.html", csrf=session["csrf"], browser_kind=kind,
                                browser_label=getattr(worker, "browser_label", kind.title()),
                                poster_mode=getattr(worker, "transport", "") == "poster",
+                               city_geolocation=getattr(worker, "transport", "") == "poster" and cfg["city_geolocation"],
                                uk_cities=json.loads((ROOT / "uk_cities.json").read_text(encoding="utf-8")),
                                policy_url=POLICY_URL, quality_url=QUALITY_URL, appeal_url=APPEAL_URL,
                                extension_path=str(ROOT / ("firefox_extension" if kind == "firefox" else "chrome_extension")))
@@ -225,6 +226,15 @@ def create_app(data_dir=None, worker_factory=None, config=None):
             raise ReviewError("Finish or cancel the current review first.", 409)
         worker.command("check")
         return jsonify(ok=True, requires_extension=getattr(worker, "extension_mode", False)), 202
+
+    @app.post("/api/browser/location")
+    def set_city_location():
+        city = body().get("city", "")
+        if not hasattr(worker, "set_city_location"):
+            raise ReviewError("Automatic city location requires poster mode.", 409)
+        if store.active() or worker.snapshot()["busy"]:
+            raise ReviewError("Finish the current action before changing city location.", 409)
+        return jsonify(ok=True, location=worker.set_city_location(city))
 
     @app.post("/api/browser/verified")
     def verified_browser():

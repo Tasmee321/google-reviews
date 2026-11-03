@@ -11,10 +11,11 @@ verified Google account and one review at a time; posting needs an explicit
    server. Enable its kill switch and keep the selected browser out of split-tunnel exclusions.
 3. Run `install.bat` once. It installs dependencies in this project's `.venv`.
 4. Run `run.bat` or `start_localhost.bat`. Keep the terminal open.
-5. In the dashboard, open Google sign-in and finish it in the dedicated poster
-   browser. Then click **Check connection**.
-6. Choose a UK city for a business-name search, or paste a specific Google Maps
-   link. Enter your review/rating, click **Start**, then explicitly **Post**.
+5. Choose a UK city. Its approximate browser location is selected immediately,
+   including before Google sign-in. The location status appears under the picker.
+6. Open Google sign-in and finish it in the dedicated poster browser, then click
+   **Check connection**. Search a business or paste its Maps link, enter your
+   review/rating, click **Start**, then explicitly **Post**.
 
 The default address is http://127.0.0.1:5000/ . `check_setup.bat` diagnoses
 configuration, dependencies and browser installation without signing in or posting.
@@ -25,15 +26,24 @@ configuration, dependencies and browser installation without signing in or posti
 - UK language/time: `en-GB` and `Europe/London` (GMT/BST).
 - All **76 UK cities** from the GOV.UK city list, grouped by nation.
 - No application proxy: `proxies` must remain `[]`. Windows/Avast controls routing.
-- No device emulation or coordinate override by default; no random user-agent changes.
+- Automatic city geolocation is enabled: choose a city to apply its coordinates.
+  No device emulation or random user-agent changes are enabled.
 - History, account shortcuts, duplicate protection and read-only saved-review checks.
 
-City selection narrows **business search**, not the VPN exit location. The app
+City selection narrows **business search** and changes the poster browser's
+reported geolocation, **not** the VPN exit IP. All United Kingdom clears the city
+override (or restores manual coordinates if configured). The app
 neither switches Avast servers nor verifies its IP/DNS/IPv6 protection. A saved
 review confirms saved status only; public visibility remains unknown.
 
 `config.json` is ready to use. `config.example.json` is the reset/reference copy.
 No Google Maps API key, proxy subscription or Google password in a config file is required.
+
+Coordinates for all 76 cities are bundled in `uk_city_locations.json`: representative
+city/area points from [OpenStreetMap contributors, ODbL](https://www.openstreetmap.org/copyright),
+retrieved 3 November 2026. City changes make no live geocoding requests. Selection
+survives dashboard refresh and successful posts, but must be chosen again after a
+server restart. Set `city_geolocation` to `false` to keep the picker search-only.
 
 ## Optional extension modes
 

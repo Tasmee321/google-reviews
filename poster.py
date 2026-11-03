@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from review_store import MAP_HOSTS, ReviewError, business_location, normalize_name
 from app_config import validate_config
 from browser_options import launch_options
+from city_location import load_city_locations, selected_location, apply_browser_location
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,11 +49,13 @@ class ReviewWorker:
         self.cfg = validate_config(cfg or {})
         self.browser_kind = self.cfg["browser_channel"]
         self.browser_label = {"chrome": "Chrome", "msedge": "Edge", "chromium": "Chromium"}[self.browser_kind]
+        self._city_points = load_city_locations() if self.cfg["city_geolocation"] else {}
 
         self._lock = threading.Lock()
         self._state = {"status": "disconnected", "email": "", "busy": False,
                        "transport": "poster", "browser_kind": self.browser_kind,
-                       "capabilities": list(self.capabilities),
+                       "capabilities": list(self.capabilities) + (["city_geolocation"] if self.cfg["city_geolocation"] else []),
+                       "location": selected_location(self.cfg, self._city_points),
                        "message": "Connect your Google account to get started."}
         self._queue = queue.Queue(maxsize=1)
         self._thread = None
@@ -69,7 +72,7 @@ class ReviewWorker:
     # ------------------------------------------------------------------
     def snapshot(self):
         with self._lock:
-            return dict(self._state)
+            return {**self._state, "location": dict(self._state["location"])}
 
     def _state_update(self, **values):
         with self._lock:
@@ -79,7 +82,7 @@ class ReviewWorker:
     # Public API – queue a command
     # ------------------------------------------------------------------
     def command(self, action, value=None, wait=False):
-        if action not in {"login", "check", "select", "prepare", "publish", "discard", "resolve", "saved_check"}:
+        if action not in {"login", "check", "select", "prepare", "publish", "discard", "resolve", "saved_check", "location"}:
             raise ReviewError("Unsupported browser action.")
         future = Future() if wait else None
         with self._lock:
@@ -144,7 +147,7 @@ class ReviewWorker:
                                        "Check your contributions before posting again.")
                         self.store.update(value, status=status, message=message)
                         self._prepared.pop(value, None)
-                    elif action not in {"resolve", "saved_check"}:
+                    elif action not in {"resolve", "saved_check", "location"}:
                         self._state_update(status="error", message=message)
                     failure = error if isinstance(error, ReviewError) else ReviewError(message, 502)
                     if not isinstance(error, ReviewError):
@@ -183,15 +186,51 @@ class ReviewWorker:
         if self._playwright is None:
             from playwright.sync_api import sync_playwright
             self._playwright = sync_playwright().start()
-        options = launch_options(self.cfg, self._playwright.devices)
+        options = self.browser_launch_options()
         try:
             self._context = self._playwright.chromium.launch_persistent_context(
                 str(self.store.directory / "browser"), **options)
             self._context.set_default_timeout(self.cfg["timeouts"]["element_ms"])
+            apply_browser_location(self._context, self.snapshot()["location"])
         except Exception as error:
+            if self._context is not None:
+                try:
+                    self._context.close()
+                finally:
+                    self._context = None
             raise ReviewError(
                 "Cannot open the configured browser. Run check_setup.bat, close another "
                 "copy using this profile, and check browser_channel in config.json.") from error
+
+    def browser_launch_options(self):
+        options = launch_options(self.cfg, self._playwright.devices)
+        options.pop("permissions", None)
+        location = self.snapshot()["location"]
+        if location["enabled"]:
+            options["geolocation"] = {"latitude": location["latitude"], "longitude": location["longitude"]}
+        return options
+
+    def set_city_location(self, city):
+        return self.command("location", city, wait=True)
+
+    def _location(self, city):
+        if self.store.active():
+            raise ReviewError("Finish or cancel the current review before changing city location.", 409)
+        current = self.snapshot()["location"]
+        location = selected_location(self.cfg, self._city_points, city, current["revision"] + 1)
+        if self._context is not None:
+            try:
+                apply_browser_location(self._context, location)
+            except Exception as error:
+                try:
+                    self._context.close()
+                finally:
+                    self._context = None
+                    self._prepared.clear()
+                    self._state_update(status="disconnected", email="", message="Location could not be applied; the poster browser was closed. Check connection again.")
+                raise ReviewError("City location was not applied. Reopen the poster browser and try again.", 502) from error
+        self._state_update(location=location)
+        return dict(location)
 
     # ------------------------------------------------------------------
     # Open a new page inside the context

@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parent
 DEFAULTS = {
     "mode": "poster", "port": 5000, "browser_channel": "chrome",
     "locale": "en-GB", "device": None, "proxies": [], "delay_range": [0, 0],
+    "city_geolocation": True,
     "target": {"lat": None, "lng": None, "timezone": "Europe/London"},
     "timeouts": {"navigation_ms": 45000, "element_ms": 15000},
 }
@@ -41,6 +42,8 @@ def validate_config(values):
             cfg[key] = copy.deepcopy(value)
     if cfg["mode"] not in ("poster", "extension"):
         raise ConfigError("mode must be poster or extension.")
+    if type(cfg["city_geolocation"]) is not bool:
+        raise ConfigError("city_geolocation must be true or false.")
     if type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535:
         raise ConfigError("port must be a whole number from 1 to 65535.")
     if cfg["browser_channel"] not in ("chrome", "msedge", "chromium"):
