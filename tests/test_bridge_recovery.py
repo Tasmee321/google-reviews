@@ -18,8 +18,9 @@ class BridgeRecoveryTests(unittest.TestCase):
         clock.start()
         self.addCleanup(clock.stop)
         with patch.dict('os.environ', {'REVIEW_BROWSER': 'firefox'}):
-            self.app = create_app(self.directory.name, config={"mode": "extension"})
+            self.app = create_app(self.directory.name, config={"mode": "extension", "network_guard": {"enabled": False}})
         self.client = self.app.test_client()
+        self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get('/')
         with self.client.session_transaction() as session:
             self.headers = {'X-CSRF-Token': session['csrf']}
@@ -44,6 +45,8 @@ class BridgeRecoveryTests(unittest.TestCase):
                 'url': review['navigation_url'], 'text': review['text'], 'stars': review['stars'], **changes}
 
     def callback(self, review, action, **data):
+        if action == 'publish':
+            data.setdefault('policy_confirmed', True)
         return self.post('/api/reviews/' + review['id'] + '/' + action,
                          {'confirmation_token': review['confirmation_token'], **data})
 

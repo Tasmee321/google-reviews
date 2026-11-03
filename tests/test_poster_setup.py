@@ -23,6 +23,8 @@ class ConfigurationTests(unittest.TestCase):
         cfg = validate_config({})
         options = launch_options(cfg, {})
         self.assertEqual(cfg["mode"], "poster")
+        self.assertFalse(cfg["city_geolocation"])
+        self.assertTrue(cfg["network_guard"]["enabled"])
         self.assertEqual(options["locale"], "en-GB")
         self.assertEqual(options["timezone_id"], "Europe/London")
         for absent in ("proxy", "user_agent", "geolocation", "permissions"):
@@ -107,11 +109,12 @@ class PosterApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name, FixtureWorker, config={"mode": "poster"})
+        self.app = create_app(self.temp.name, FixtureWorker, config={"mode": "poster", "network_guard": {"enabled": False}})
         self.worker = self.app.extensions["review_worker"]
         self.addCleanup(self.worker.close)
         self.store = self.app.extensions["review_store"]
         self.client = self.app.test_client()
+        self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get("/")
         with self.client.session_transaction() as session:
             self.headers = {"X-CSRF-Token": session["csrf"]}

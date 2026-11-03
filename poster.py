@@ -13,6 +13,9 @@ from review_store import MAP_HOSTS, ReviewError, business_location, normalize_na
 from app_config import validate_config
 from browser_options import launch_options
 from city_location import load_city_locations, selected_location, apply_browser_location
+from network_guard import UKNetworkGuard
+from poster_network import PosterNetworkProtection
+from diagnostics import Diagnostics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +38,7 @@ def business_key(url, name):
 # ----------------------------------------------------------------------
 # Main worker – handles a single browser session
 # ----------------------------------------------------------------------
-class ReviewWorker:
+class ReviewWorker(PosterNetworkProtection):
     extension_mode = False
     transport = "poster"
     capabilities = ["saved_checks", "account_selection", "business_resolution"]
@@ -47,6 +50,8 @@ class ReviewWorker:
         """
         self.store = store
         self.cfg = validate_config(cfg or {})
+        self.network_guard = UKNetworkGuard(self.cfg["network_guard"])
+        self.diagnostics = Diagnostics()
         self.browser_kind = self.cfg["browser_channel"]
         self.browser_label = {"chrome": "Chrome", "msedge": "Edge", "chromium": "Chromium"}[self.browser_kind]
         self._city_points = load_city_locations() if self.cfg["city_geolocation"] else {}
@@ -72,7 +77,7 @@ class ReviewWorker:
     # ------------------------------------------------------------------
     def snapshot(self):
         with self._lock:
-            return {**self._state, "location": dict(self._state["location"])}
+            return {**self._state, "location": dict(self._state["location"]), "network": self.network_guard.snapshot()}
 
     def _state_update(self, **values):
         with self._lock:
@@ -82,7 +87,7 @@ class ReviewWorker:
     # Public API – queue a command
     # ------------------------------------------------------------------
     def command(self, action, value=None, wait=False):
-        if action not in {"login", "check", "select", "prepare", "publish", "discard", "resolve", "saved_check", "location"}:
+        if action not in {"login", "check", "select", "prepare", "publish", "discard", "resolve", "saved_check", "location", "network"}:
             raise ReviewError("Unsupported browser action.")
         future = Future() if wait else None
         with self._lock:
@@ -121,7 +126,13 @@ class ReviewWorker:
     def _run(self):
         try:
             while True:
-                action, value, future = self._queue.get()
+                try:
+                    action, value, future = self._queue.get(timeout=1)
+                except queue.Empty:
+                    if self._stop.is_set():
+                        break
+                    self._idle_network_check()
+                    continue
                 if action == "close" or self._stop.is_set():
                     if future is not None:
                         future.set_exception(ReviewError("The browser worker stopped.", 409))
@@ -131,6 +142,7 @@ class ReviewWorker:
                 try:
                     result = getattr(self, "_" + action)(value)
                 except Exception as error:
+                    self.diagnostics.record("browser_action_failed", action)
                     if isinstance(error, ReviewError):
                         message = str(error)
                     elif action in {"login", "check"}:
@@ -147,7 +159,7 @@ class ReviewWorker:
                                        "Check your contributions before posting again.")
                         self.store.update(value, status=status, message=message)
                         self._prepared.pop(value, None)
-                    elif action not in {"resolve", "saved_check", "location"}:
+                    elif action not in {"resolve", "saved_check", "location", "network"}:
                         self._state_update(status="error", message=message)
                     failure = error if isinstance(error, ReviewError) else ReviewError(message, 502)
                     if not isinstance(error, ReviewError):
@@ -190,6 +202,7 @@ class ReviewWorker:
         try:
             self._context = self._playwright.chromium.launch_persistent_context(
                 str(self.store.directory / "browser"), **options)
+            self.network_guard.invalidate()
             self._context.set_default_timeout(self.cfg["timeouts"]["element_ms"])
             apply_browser_location(self._context, self.snapshot()["location"])
         except Exception as error:
@@ -237,6 +250,7 @@ class ReviewWorker:
     # ------------------------------------------------------------------
     def _new_page(self):
         self._ensure_browser()
+        self._verify_network()
         return self._context.new_page()
 
     # ------------------------------------------------------------------
@@ -312,6 +326,7 @@ class ReviewWorker:
     def _login(self, email):
         from playwright.sync_api import TimeoutError as BrowserTimeout
         self._expected_email = email
+        self._verify_network(force=True)
         page = self._new_page()
         try:
             page.goto(
@@ -641,6 +656,8 @@ class ReviewWorker:
         if page.is_closed() or original.is_closed():
             raise ReviewError("The Google Maps window was closed. Nothing was posted.")
         self._random_delay()
+        # Check routing before the final account/text/rating checks to avoid validating stale form data.
+        self._verify_network(force=True)
         self._check_google_page(original)
         name = self._one_visible(original.get_by_role("heading", level=1,
                                                     name=review["business_name"],
@@ -662,6 +679,8 @@ class ReviewWorker:
             raise ReviewError("Google's Post button is disabled. Nothing was posted.")
         if self._stop.is_set():
             raise ReviewError("The app stopped before submission. Nothing was posted.")
+        if self.network_guard.enabled and not self.network_guard.snapshot()["allowed"]:
+            raise ReviewError("UK-IP check expired before submission. Nothing was posted; check the connection and prepare again.", 409)
         self.store.transition(
             review_id,
             "publishing",

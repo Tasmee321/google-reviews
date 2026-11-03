@@ -15,9 +15,13 @@ percentage, moderation approval ya permanent visibility ki guarantee nahi hai.
 - Reviews ke andar website/social links, phone numbers aur email addresses na
   daalein. Kisi ki private, medical, financial ya identification details expose na karein.
 - Paid/incentivized review, payment/discount/free service ke badlay review,
-  aur employment/business/personal conflict-of-interest wala review submit na karein.
+  aur current/former employment, contractual/consultory, business/personal conflict-of-interest wala review submit na karein.
 - Ek hi review repeat ya multiple accounts se rating influence na karein.
   Google policy fake engagement ke liye sensor data manipulation bhi prohibit karti hai.
+- Reviews ka unusual volume/pattern aur account activity bhi Google evaluate kar
+  sakta hai. App koi 'safe daily count', account rotation ya moderation-evasion recipe nahi deta.
+- Sirf positive reviews mangwana, premises par pressure dalna ya prescribed text
+  likhwana theek nahi. Har review independent asli reviewer ke apne alfaaz hon.
 
 Sources: [Google content policy](https://support.google.com/contributionpolicy/answer/7400114?hl=en)
 aur [high-quality review tips](https://support.google.com/maps/answer/10357321?hl=en).
@@ -31,13 +35,29 @@ aur [high-quality review tips](https://support.google.com/maps/answer/10357321?h
    local submitted/uncertain history mein repeated wording check hoti hai.
 4. Warnings manually review karein. App text/rating change nahi karta, koi
    Google approval request nahi bhejta, aur draft kisi external checker ko upload nahi karta.
-5. Sahi branch, account aur exact text/rating dekh kar khud Post karein.
+5. Sahi branch, account aur exact text/rating dekh kar policy confirmation tick
+   karein, phir khud Post karein. Checkbox har naye review par reset hota hai.
+6. Clear website/email inclusion final submission ko rokta hai; Cancel karke
+   khud edit aur dobara prepare karein. Possible phone, repeated wording aur
+   doosre local account ki same-business submission manual-review warnings hain.
 
 Yeh limited advisory checks hain, exhaustive policy classifier nahi. Possible
 phone number asal mein koi aur identifier bhi ho sakta hai. No warnings ka
 matlab approved, authentic, safe-to-publish ya guaranteed live nahi. Deleted
 history ka text preflight matching ke liye retain nahi hota; account names ya
 matched review text warnings mein disclose nahi hote.
+
+## Jo software verify nahi kar sakta
+
+App real visit/service experience, sachai, hidden payment/incentive, relationship,
+ownership/employment/competitor conflict ya asal account operator independently
+verify nahi karti. Har language mein hate/harassment, defamation, private medical
+ya financial information, off-topic text, restricted-goods promotion aur legal
+eligibility ka exhaustive classifier bhi nahi. In points ko khud check karna hai.
+
+UK IP Google review policy ki requirement nahi—yeh connection preference hai.
+Recommended defaults mein city spoofing OFF hai aur city picker sirf search ke
+liye hai. VPN ya coordinates authenticity/publication ka proof nahi bante.
 
 ## Review live na dikhe to
 
@@ -48,6 +68,8 @@ matched review text warnings mein disclose nahi hote.
 - Business/category par posting restrictions ya doosre non-policy reasons bhi
   ho sakte hain. App exact removal reason diagnose nahi karta.
 - Removal ghalat lage aur appeal available ho to official appeal flow use karein.
+  Eligible removal par aam tor par ek appeal, removal ke ek saal ke andar, available
+  ho sakti hai; current Google notice/eligibility follow karein.
   Appeal submit karne ke baad Google review edit/delete karne se appeal cancel
   ho sakti hai. App koi appeal, edit, deletion ya repost khud nahi bhejta.
 

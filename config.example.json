@@ -4,7 +4,12 @@
   "browser_channel": "chrome",
   "locale": "en-GB",
   "device": null,
-  "city_geolocation": true,
+  "city_geolocation": false,
+  "network_guard": {
+    "enabled": true,
+    "interval_seconds": 30,
+    "timeout_ms": 8000
+  },
   "proxies": [],
   "delay_range": [0, 0],
   "target": {

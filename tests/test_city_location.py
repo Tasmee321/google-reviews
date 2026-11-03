@@ -56,10 +56,11 @@ class CityLocationApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name, config={"mode": "poster"})
+        self.app = create_app(self.temp.name, config={"mode": "poster", "city_geolocation": True})
         self.worker = self.app.extensions["review_worker"]
         self.addCleanup(self.worker.close)
         self.client = self.app.test_client()
+        self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get("/")
         with self.client.session_transaction() as session:
             self.headers = {"X-CSRF-Token": session["csrf"]}
@@ -138,8 +139,9 @@ class CityLocationApiTests(unittest.TestCase):
 
     def test_extension_mode_cannot_accept_city_location_requests(self):
         with tempfile.TemporaryDirectory() as folder:
-            app = create_app(folder, config={"mode": "extension"})
+            app = create_app(folder, config={"mode": "extension", "network_guard": {"enabled": False}})
             client = app.test_client()
+            self.assertEqual(client.post('/api/unlock', json={'token': app.extensions['dashboard_token']}).status_code, 200)
             client.get("/")
             with client.session_transaction() as session:
                 headers = {"X-CSRF-Token": session["csrf"]}

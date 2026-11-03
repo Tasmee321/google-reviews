@@ -16,15 +16,15 @@ def check_dashboard(port):
     # Local health checks must never be sent through a configured HTTP proxy.
     opener = build_opener(ProxyHandler({}))
     try:
-        with opener.open(url + "api/status", timeout=3) as response:
-            data = json.loads(response.read(512000))
+        with opener.open(url + "api/health", timeout=3) as response:
+            data = json.loads(response.read(4096))
         if (not isinstance(data, dict) or data.get("ok") is not True
-                or not isinstance(data.get("browser"), dict)
-                or not isinstance(data.get("reviews"), list)):
+                or data.get("application") != "tasmee-personal-reviews"
+                or data.get("authentication_required") is not True):
             print(f"Another service is using {url}; nothing new was started.")
             return 2
         print(f"Tasmee dashboard already running: {url}")
-        print("Use the existing dashboard tab. Restart the server to apply configuration changes.")
+        print("Use the existing private dashboard tab/link. Restart the server to apply configuration changes or replace its unlock code.")
         return 0
     except HTTPError as error:
         error.close()

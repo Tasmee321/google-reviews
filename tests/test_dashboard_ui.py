@@ -50,7 +50,7 @@ class DashboardTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.app = create_app(self.directory.name, UiWorker)
+        self.app = create_app(self.directory.name, UiWorker, config={"network_guard": {"enabled": False}})
         self.server = make_server("127.0.0.1", 0, self.app, threaded=True)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -60,7 +60,7 @@ class DashboardTests(unittest.TestCase):
         self.page = self.context.new_page()
         self.errors = []
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
-        self.page.goto(f"http://127.0.0.1:{self.server.server_port}")
+        self.page.goto(f"http://127.0.0.1:{self.server.server_port}/#unlock={self.app.extensions['dashboard_token']}")
         self.page.get_by_text("Google connected", exact=True).wait_for()
         self.worker = self.app.extensions["review_worker"]
 
@@ -135,11 +135,12 @@ class DashboardTests(unittest.TestCase):
         self.fill_review()
         self.page.get_by_role("button", name="Start", exact=False).click()
         self.page.get_by_role("button", name="Post this review", exact=True).wait_for()
-        self.assertFalse(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
+        self.assertTrue(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
         self.page.reload()
         self.page.get_by_role("button", name="Post this review", exact=True).wait_for()
         self.assertEqual(self.page.locator('#text').input_value(), '')
         self.assertTrue(self.page.locator('#target').is_disabled())
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role("button", name="Post this review", exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for()
         self.page.reload()
@@ -155,12 +156,13 @@ class DashboardTests(unittest.TestCase):
         self.fill_review(text)
         self.page.get_by_role("button", name="Start", exact=False).click()
         self.page.get_by_role("button", name="Post this review", exact=True).wait_for()
-        self.page.locator('#previewDetails > summary').click()
+        self.assertTrue(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
         self.assertEqual(self.page.locator("#previewText").inner_text(), text)
         self.assertEqual(self.page.locator("#previewAddress").inner_text(), "Main Road, Karachi")
         self.assertEqual(self.page.locator("#previewCoordinates").inner_text(), "Place coordinates: 24.860700, 67.001100")
         self.assertEqual(self.page.evaluate("window.unexpected"), None)
         self.assertEqual(sum(action == "publish" for action, _ in self.worker.actions), 0)
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role("button", name="Post this review", exact=True).click()
         self.page.locator("#reviewStatus").get_by_text("Success", exact=True).wait_for()
         self.assertEqual(sum(action == "publish" for action, _ in self.worker.actions), 1)
@@ -177,6 +179,7 @@ class DashboardTests(unittest.TestCase):
     def test_success_clears_composer_but_keeps_history_and_details(self):
         self.fill_review()
         self.page.get_by_role('button',name='Start',exact=False).click()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for()
         for field in ('target','expected_name','text'):
@@ -213,7 +216,7 @@ class DashboardTests(unittest.TestCase):
         self.fill_review()
         self.page.get_by_role("button", name="Start", exact=False).click()
         self.page.get_by_role("button", name="Post this review", exact=True).wait_for()
-        self.page.locator('#previewDetails > summary').click()
+        self.assertTrue(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
         self.page.emulate_media(reduced_motion="reduce")
         for width in (375, 768, 1024, 1440):
             self.page.set_viewport_size({"width": width, "height": 950})

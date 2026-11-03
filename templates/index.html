@@ -111,7 +111,13 @@
         <p class="hint">VPN protection is not verified by this app. Google sign-in se pehle Avast VPN connected, Always on aur kill switch on rakhein. Firefox ko split-tunnel exclusions mein na rakhein. Har run par wahi Firefox profile use hoga; IP rotation nahi hoti.</p>
         {% endif %}
         {% if poster_mode %}
-        <p class="hint">Google ka sign-in poster ki dedicated {{ browser_label }} window mein hoga. Avast SecureLine VPN mein UK server manually connect rakhein, kill switch on aur is browser ko split tunneling se exclude na karein. App proxy use nahi karta aur VPN connection verify nahi karta.</p>
+        <p class="hint">Google sign-in dedicated {{ browser_label }} window mein hoga. Avast SecureLine VPN UK par manually connect karein, kill switch ON rakhein aur browser ko split-tunnel exclusions mein na rakhein. UK-IP guard VPN app ya har network route ko certify nahi karta.</p>
+        <div class="visibility-panel" aria-labelledby="networkTitle">
+          <h3 id="networkTitle">UK-IP protection</h3>
+          <p id="networkStatus" class="hint" role="status" aria-live="polite">Not checked. Google sign-in se pehle UK IP check hoga.</p>
+          <button id="networkCheckButton" class="button secondary" type="button">Check UK IP</button>
+          <p class="hint">Cloudflare ko browser ki public IP nazar aati hai; review text ya Google credentials nahi bheje jate. Same city zaroori nahi.</p>
+        </div>
         {% endif %}
         <form id="accountForm" novalidate>
           <label for="accountSelect">Saved account shortcuts</label>
@@ -131,7 +137,7 @@
         <div id="previewEmpty" class="empty-state"><svg aria-hidden="true" viewBox="0 0 48 48"><path d="M12 8h24v32H12zM18 17h12M18 24h12M18 31h7"/></svg><p>Paste a link and click Start.</p><span class="hint">Business auto-fetch hoga. Detailed preview dekhna optional hai.</span></div>
         <div id="previewContent" hidden>
           <h3 id="previewBusiness"></h3>
-          <details id="previewDetails"><summary>View details / preview · optional</summary>
+          <details id="previewDetails"><summary>Check business, account and exact review</summary>
           <a id="previewLink" class="text-link" target="_blank" rel="noopener noreferrer">Open business on Google Maps ↗</a>
           <section class="business-location" aria-labelledby="locationTitle">
             <h4 id="locationTitle">Business location</h4>
@@ -147,6 +153,14 @@
           <p id="previewDates" class="hint"></p>
           <div class="visibility-panel"><span id="savedStatus" class="badge">Not checked</span><p id="checkMessage" class="hint"></p><p class="hint">Public visibility: <strong>Unknown</strong>. Apne signed-in account mein saved dikhna public live hone ka proof nahi.</p></div>
           <p id="visibilityNotice" class="hint" hidden>Google ne submission confirm ki hai. Public visibility independently verify nahi hui.</p>
+          <div id="policyConfirmation" class="visibility-panel" hidden>
+            <p class="hint">Final check: sahi branch/account, apna asli firsthand experience, sachchi rating; payment/discount/free item ke badlay review ya employment/business/personal conflict nahi. Multiple accounts se rating influence ya jhoota visit nahi.</p>
+            <p class="hint">Private information, links/contact details, advertising, off-topic content, harassment/hate aur unsupported allegations check karein. Respectful negative feedback allowed hai.</p>
+            <ul id="preparedPolicyWarnings" class="activity-list"></ul>
+            <label class="check-label" for="policy_confirmed"><input id="policy_confirmed" type="checkbox" aria-describedby="policy_confirmedError"><span>I confirm these points and have checked this exact review.</span></label>
+            <p id="policy_confirmedError" class="field-error" role="alert" hidden></p>
+            <p class="hint">Yeh aap ki confirmation hai, Google approval ya authenticity verification nahi. Links/email ho to Cancel karke edit aur dobara Start karein.</p>
+          </div>
           <div class="preview-actions"><button id="publishButton" class="button primary" type="button" hidden>Post this review</button><button id="reconcileButton" class="button secondary" type="button" hidden>Verify saved review</button><button id="checkSavedButton" class="button secondary" type="button" hidden>Check saved status</button><button id="cancelButton" class="button quiet" type="button" hidden>Cancel</button></div>
           <details id="activityDetails"><summary>Activity</summary><ol id="activityList" class="activity-list"></ol></details>
         </div>
@@ -162,7 +176,13 @@
     <div class="section-heading"><h2 id="monitorTitle">Saved-review monitoring</h2><span id="monitorStatus" class="badge">Setup required</span></div>
     <label class="check-label"><input id="autoCheck" type="checkbox" checked>Automatically check saved reviews while this dashboard is open</label>
     <p id="monitorHint" class="hint">{{ 'Poster mode: no extension required.' if poster_mode else 'Extension 1.0.6 required.' }} Idle connected account only; one check per 10 minutes, each review no more often than every 6 hours. No automatic posting or account switching.</p>
-    <p class="hint">VPN: browser IP/DNS/IPv6 protection app ne verify nahi ki. Avast connected aur kill switch on rakhein. <a href="https://api.ipify.org?format=json" target="_blank" rel="noopener noreferrer">Is browser ka IPv4 check karein ↗</a> (external IP service). Google aap ko signed-in account se pehchan sakta hai; VPN review deletion ko prevent nahi karta.</p>
+    <p class="hint">UK-IP check sirf sampled browser requests ka country check hai; DNS/all IPv6 routes ya Avast connection ka proof nahi. Avast kill switch ON rakhein. Google aap ko signed-in account se pehchan sakta hai; VPN review deletion ko prevent nahi karta.</p>
+  </section>
+  <section class="history-section" aria-labelledby="diagnosticsTitle">
+    <h2 id="diagnosticsTitle">Local protection &amp; diagnostics</h2>
+    <p class="hint">Session/history folder par OS access controls lagte hain. Yeh encryption nahi; same-user malware/admins se protection ka claim nahi. Windows screen lock aur disk encryption bhi use karein.</p>
+    <a class="button secondary" href="/api/diagnostics?download=1">Download private diagnostics</a>
+    <p class="hint">Report mein versions, protection status aur fixed error codes hain—passwords, cookies, review text, emails, full IP ya profile paths nahi. Browser/session ka ZIP share na karein.</p>
   </section>
   <section class="history-section" aria-labelledby="historyTitle">
     <div class="section-heading"><h2 id="historyTitle" tabindex="-1">Review history</h2><span id="historyCount" class="hint">0 reviews</span><button id="clearHistoryButton" class="button quiet danger" type="button">Delete local history</button></div>

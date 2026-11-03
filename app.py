@@ -16,21 +16,25 @@ from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, send_file
+from werkzeug.exceptions import HTTPException
 
 from review_store import ReviewStore, ReviewError, validate_review, valid_email, maps_url
 from browser_bridge import BrowserBridge, open_normal_chrome
 from personal_browser import browser_kind, open_firefox_dashboard
 from build_firefox_extension import firefox_archive
-from review_policy import review_warnings, POLICY_URL, QUALITY_URL, APPEAL_URL
+from review_policy import review_warnings, policy_submission_check, POLICY_URL, QUALITY_URL, APPEAL_URL
 from app_config import ConfigError, load_config, validate_config
 from poster import ReviewWorker
+from local_security import secure_data_directory, inspect_data_directory, LocalSecurityError
+from diagnostics import Diagnostics, diagnostic_report
+from dashboard_auth import install_dashboard_auth
 
 ROOT = Path(__file__).resolve().parent
 
 
 def acquire_runtime_lock(directory):
     """Prevent a second process from invalidating an active browser's review state."""
-    directory.mkdir(parents=True, exist_ok=True)
+    secure_data_directory(directory)
     handle = (directory / "session.lock").open("a+b")
     if handle.seek(0, 2) == 0:
         handle.write(b"0")
@@ -57,7 +61,9 @@ def create_app(data_dir=None, worker_factory=None, config=None):
         TRUSTED_HOSTS=["localhost", "127.0.0.1"],
     )
     cfg = load_config() if config is None else validate_config(config)
-    store = ReviewStore(Path(data_dir) if data_dir else ROOT / "personal_data")
+    directory = Path(data_dir) if data_dir else ROOT / "personal_data"
+    protection = secure_data_directory(directory)
+    store = ReviewStore(directory)
     store.recover()
 
     if worker_factory is None:
@@ -72,23 +78,33 @@ def create_app(data_dir=None, worker_factory=None, config=None):
         else:
             worker = worker_factory(store, cfg)
 
-    app.extensions.update(review_store=store, review_worker=worker)
+    diagnostics = getattr(worker, "diagnostics", Diagnostics())
+    diagnostics.record("startup_protected")
+    app.extensions.update(review_store=store, review_worker=worker, diagnostics=diagnostics,
+                          local_protection=protection)
     atexit.register(worker.close)
+    install_dashboard_auth(app)
 
     @app.before_request
     def protect_local_api():
         if request.remote_addr not in {"127.0.0.1", "::1"}:
             return jsonify(ok=False, message="This tool is only available on this computer."), 403
         if request.method == "POST":
-            token = session.get("csrf")
-            supplied = request.headers.get("X-CSRF-Token", "")
             origin = request.headers.get("Origin")
-            if origin and urlsplit(origin).netloc != request.host:
+            if origin and origin != request.host_url.rstrip("/"):
                 return jsonify(ok=False, message="Invalid request origin."), 403
-            if not token or not secrets.compare_digest(token, supplied):
-                return jsonify(ok=False, message="Refresh this page before trying again."), 403
             if not request.is_json:
                 return jsonify(ok=False, message="Expected a JSON request."), 415
+            if request.endpoint == "unlock_dashboard":
+                return None
+            token = session.get("csrf")
+            supplied = request.headers.get("X-CSRF-Token", "")
+            if not token or not secrets.compare_digest(token, supplied):
+                return jsonify(ok=False, message="Refresh this page before trying again."), 403
+            if (cfg["network_guard"]["enabled"] and getattr(worker, "extension_mode", False)
+                    and request.endpoint in {"login", "check_login", "select_account", "verified_browser", "prepare",
+                                             "resolve_business", "publish", "submitting", "start_saved_check"}):
+                raise ReviewError("UK-IP protection requires poster mode. Legacy extension traffic cannot be verified by this guard.", 409)
 
     @app.after_request
     def security_headers(response):
@@ -109,6 +125,13 @@ def create_app(data_dir=None, worker_factory=None, config=None):
     @app.errorhandler(413)
     def too_large(error):
         return jsonify(ok=False, message="The request is too large."), 413
+
+    @app.errorhandler(Exception)
+    def unexpected_error(error):
+        if isinstance(error, HTTPException):
+            return jsonify(ok=False, message=error.name), error.code
+        diagnostics.record("unexpected_server_error")
+        return jsonify(ok=False, message="Unexpected local error. Download diagnostics and restart the app.", code="unexpected_server_error"), 500
 
     def body():
         data = request.get_json(silent=True)
@@ -133,6 +156,25 @@ def create_app(data_dir=None, worker_factory=None, config=None):
         return jsonify(ok=True, browser=worker.snapshot(), reviews=store.list_reviews(),
                        history_total=store.count(), businesses=store.business_statistics(),
                        accounts=store.accounts())
+
+    @app.get("/api/diagnostics")
+    def diagnostics_snapshot():
+        # Deliberately exclude account emails, review text, full IPs, paths and tokens.
+        report = diagnostic_report(cfg, worker.snapshot(), inspect_data_directory(directory), diagnostics)
+        if request.args.get("download") == "1":
+            content = io.BytesIO(json.dumps(report, indent=2).encode("utf-8"))
+            return send_file(content, mimetype="application/json", as_attachment=True,
+                             download_name="tasmee-diagnostics.json")
+        return jsonify(ok=True, diagnostics=report)
+
+    @app.post("/api/browser/network")
+    def network_check():
+        body()
+        if getattr(worker, "transport", "") != "poster":
+            raise ReviewError("UK-IP checks require the poster browser.", 409)
+        if store.active() or worker.snapshot()["busy"]:
+            raise ReviewError("Finish or cancel the current action before checking the network.", 409)
+        return jsonify(ok=True, network=worker.command("network", wait=True))
 
     @app.get("/api/history")
     def history():
@@ -245,11 +287,20 @@ def create_app(data_dir=None, worker_factory=None, config=None):
 
     @app.post("/api/reviews/preflight")
     def review_preflight():
-        text = body().get("text")
+        data = body()
+        text = data.get("text")
         if not isinstance(text, str) or len(text) > 4000:
             raise ReviewError("Review text must be a string of at most 4,000 characters.",
                               fields={"text": "Enter at most 4,000 characters."})
-        return jsonify(ok=True, warnings=review_warnings(text, store.has_matching_text(text)),
+        cross_account = False
+        review_id = data.get("review_id")
+        if review_id is not None:
+            if not isinstance(review_id, str) or len(review_id) != 24:
+                raise ReviewError("Invalid local review identifier.")
+            review = store.get(review_id)
+            cross_account = store.has_other_account_review(review["business_key"], review["account_email"])
+            text = review["text"]
+        return jsonify(ok=True, warnings=review_warnings(text, store.has_matching_text(text), cross_account),
                        message="Local advisory checks only. No warnings does not mean Google approved the review.")
 
     @app.post("/api/reviews")
@@ -289,12 +340,21 @@ def create_app(data_dir=None, worker_factory=None, config=None):
 
     @app.post("/api/reviews/<review_id>/publish")
     def publish(review_id):
-        token = body().get("confirmation_token", "")
+        data = body()
+        token = data.get("confirmation_token", "")
         review = store.get(review_id)
         if not isinstance(token, str) or not secrets.compare_digest(review["confirmation_token"], token):
             raise ReviewError("Confirmation expired. Prepare the review again.", 409)
         if worker.snapshot()["busy"]:
             raise ReviewError("The browser is busy.", 409)
+        if review["status"] != "ready":
+            raise ReviewError("Prepare the review before posting.", 409)
+        try:
+            policy_submission_check(data, review["text"], store.has_matching_text(review["text"]),
+                                    store.has_other_account_review(review["business_key"], review["account_email"]))
+        except ReviewError:
+            diagnostics.record("policy_check_blocked", "publish")
+            raise
         store.transition(review_id, "ready", "publishing", "Rechecking the account, business, text and rating.")
         try:
             worker.command("publish", review_id)
@@ -451,6 +511,8 @@ def create_app(data_dir=None, worker_factory=None, config=None):
 
 
 if __name__ == "__main__":
+    if os.name != "nt":
+        os.umask(0o077)
     load_dotenv(ROOT / ".env")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
@@ -462,14 +524,19 @@ if __name__ == "__main__":
         runtime_lock = acquire_runtime_lock(ROOT / "personal_data")
     except RuntimeError as error:
         raise SystemExit(str(error))
-    dashboard = create_app(config=config)
-    print(f"Personal review dashboard: http://127.0.0.1:{port}", flush=True)
+    try:
+        dashboard = create_app(config=config)
+    except LocalSecurityError as error:
+        runtime_lock.close()
+        raise SystemExit(str(error))
+    private_url = f"http://127.0.0.1:{port}/#unlock={dashboard.extensions['dashboard_token']}"
+    print(f"Private dashboard link (do not share): {private_url}", flush=True)
     import threading
     def open_dashboard():
         try:
             opener = webbrowser.open if config["mode"] == "poster" else (
                 open_firefox_dashboard if browser_kind() == "firefox" else open_normal_chrome)
-            opener(f"http://127.0.0.1:{port}/")
+            opener(private_url)
         except ReviewError as error:
             print(str(error), flush=True)
     if os.getenv("REVIEW_OPEN_BROWSER", "1") != "0":

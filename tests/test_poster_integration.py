@@ -36,16 +36,21 @@ class InterceptedWorker(ReviewWorker):
         self.submissions = 0
         self.external = []
         self.extra_ratings = None
+        self.network_country = 'GB'
+        self.network_unavailable = False
+        self.network_check_calls = 0
 
     def _ensure_browser(self):
         if self._context is not None:
             return
-        self._playwright = sync_playwright().start()
+        if self._playwright is None:
+            self._playwright = sync_playwright().start()
         options = self.browser_launch_options()
         options["headless"] = True
         self._context = self._playwright.chromium.launch_persistent_context(
             str(self.store.directory / "fixture-browser"), **options)
         self._context.set_default_timeout(5000)
+        self.network_guard.invalidate()
         apply_browser_location(self._context, self.snapshot()["location"])
         self._context.route("**/*", self._route)
 
@@ -67,6 +72,13 @@ class InterceptedWorker(ReviewWorker):
 
     def _route(self, route):
         parsed = urlsplit(route.request.url)
+        if parsed.hostname in {'www.cloudflare.com', '1.1.1.1'} and parsed.path == '/cdn-cgi/trace':
+            self.network_check_calls += 1
+            if self.network_unavailable:
+                route.abort()
+            else:
+                route.fulfill(body=f'ip=1.1.1.1\nloc={self.network_country}\n', content_type='text/plain')
+            return
         if parsed.hostname not in {"www.google.com", "accounts.google.com"}:
             self.external.append(route.request.url)
             route.abort()
@@ -107,7 +119,7 @@ class PosterIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name, InterceptedWorker, config={"mode": "poster"})
+        self.app = create_app(self.temp.name, InterceptedWorker, config={"mode": "poster", "city_geolocation": True})
         self.worker = self.app.extensions["review_worker"]
         self.addCleanup(self.worker.close)
         self.server = make_server("127.0.0.1", 0, self.app, threaded=True)
@@ -122,7 +134,7 @@ class PosterIntegrationTests(unittest.TestCase):
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
         self.page.on("request", lambda request: self.requests.append(request.post_data_json)
                      if request.url.endswith("/api/business/resolve") else None)
-        self.page.goto(f"http://127.0.0.1:{self.server.server_port}/")
+        self.page.goto(f"http://127.0.0.1:{self.server.server_port}/#unlock={self.app.extensions['dashboard_token']}")
         self.page.get_by_role("button", name="Check connection", exact=True).click()
         self.page.get_by_text("Google connected", exact=True).wait_for()
 
@@ -144,6 +156,7 @@ class PosterIntegrationTests(unittest.TestCase):
         self.assertEqual(self.requests[-1]["target"], "My Market, Manchester, England, United Kingdom")
         self.assertFalse(self.page.locator("#extensionSetup").is_visible())
         self.assertEqual(self.worker.submissions, 0)
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role("button", name="Post this review", exact=True).click()
         self.page.locator("#reviewStatus").get_by_text("Success", exact=True).wait_for()
         self.assertEqual(self.worker.submissions, 1)
@@ -158,6 +171,7 @@ class PosterIntegrationTests(unittest.TestCase):
         self.worker.iframe = True
         self.prepare(TARGET)
         self.assertEqual(self.requests[-1]["target"], TARGET)
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role("button", name="Post this review", exact=True).click()
         self.page.locator("#reviewStatus").get_by_text("Success", exact=True).wait_for()
         self.assertEqual(self.worker.submissions, 1)
@@ -203,7 +217,7 @@ class PosterIntegrationTests(unittest.TestCase):
 
     def test_city_selected_before_browser_launch_is_applied_on_first_page(self):
         with tempfile.TemporaryDirectory() as folder:
-            worker = InterceptedWorker(ReviewStore(folder), validate_config({}))
+            worker = InterceptedWorker(ReviewStore(folder), validate_config({"city_geolocation": True}))
             try:
                 city = "London, England, United Kingdom"
                 worker.set_city_location(city)

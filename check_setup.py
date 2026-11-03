@@ -30,6 +30,7 @@ def main(argv=None):
     parser.add_argument("--initialize", action="store_true", help="Create config.json from the example only when absent")
     parser.add_argument("--install-browser", action="store_true", help="Install bundled Chromium only if selected in config")
     parser.add_argument("--skip-browser", action="store_true", help="Validate files/dependencies only, for automated tests")
+    parser.add_argument("--diagnostics", action="store_true", help="Print a redacted offline diagnostic report; no IP requests")
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
         print("Python 3.11 or newer is required.")
@@ -79,7 +80,14 @@ def main(argv=None):
                         raise ValueError("Configured browser is missing. Install Chrome/Edge, or select chromium in config.json and rerun install.bat.")
         print(f"Setup OK: {cfg['mode']} mode; http://127.0.0.1:{cfg['port']}/; {sum(map(len, cities.values()))} UK cities.")
         print("No application proxy. Connect Avast SecureLine VPN to an available UK server yourself.")
-        print("VPN routing and live Google sign-in were not tested by this check.")
+        print("UK-IP guard: " + ("enabled; browser checks run before Google sign-in/posting" if cfg["network_guard"]["enabled"] else "DISABLED"))
+        if cfg["mode"] == "extension" and cfg["network_guard"]["enabled"]:
+            print("Legacy extension actions are blocked by the enabled guard. Use poster mode for UK-IP protection.")
+        print("VPN routing and live Google sign-in were not tested by this offline check.")
+        if args.diagnostics:
+            from diagnostics import Diagnostics, diagnostic_report
+            from local_security import inspect_data_directory
+            print(json.dumps(diagnostic_report(cfg, {}, inspect_data_directory(ROOT / "personal_data"), Diagnostics()), indent=2))
         return 0
     except (ConfigError, ReviewError, ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Setup error: {error}")

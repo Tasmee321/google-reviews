@@ -201,6 +201,17 @@ class ReviewStore:
             return any(normalize_name(row["text"]) == normalized for row in db.execute(
                 "SELECT text FROM reviews WHERE status IN ('posted','submitting','unconfirmed')"))
 
+    def has_other_account_review(self, business_key, email):
+        """Local advisory, including deleted-detail receipts; never return account identities."""
+        if not business_key:
+            return False
+        with self.connect() as db:
+            return bool(db.execute("SELECT 1 FROM reviews WHERE business_key=? AND account_email<>? "
+                                   "AND status IN ('posted','submitting','unconfirmed') LIMIT 1",
+                                   (business_key, email.strip().lower())).fetchone() or
+                        db.execute("SELECT 1 FROM receipts WHERE business_key=? AND account_hash<>? LIMIT 1",
+                                   (business_key, self._account_hash(db, email))).fetchone())
+
     def _update(self, db, review_id, values):
         if not values.keys() <= {"status", "message", "business_name", "business_url", "business_key",
                                  "business_address", "business_latitude", "business_longitude",

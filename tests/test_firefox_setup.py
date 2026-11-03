@@ -68,8 +68,9 @@ class FirefoxSetupTests(unittest.TestCase):
 
     def firefox_app(self):
         with patch.dict(os.environ, {"REVIEW_BROWSER": "firefox"}):
-            app = create_app(Path(self.temp.name) / "data", config={"mode": "extension"})
+            app = create_app(Path(self.temp.name) / "data", config={"mode": "extension", "network_guard": {"enabled": False}})
         client = app.test_client()
+        self.assertEqual(client.post('/api/unlock', json={'token': app.extensions['dashboard_token']}).status_code, 200)
         client.get("/")
         with client.session_transaction() as session:
             headers = {"X-CSRF-Token": session["csrf"]}

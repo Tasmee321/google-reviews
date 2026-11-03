@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parent
 DEFAULTS = {
     "mode": "poster", "port": 5000, "browser_channel": "chrome",
     "locale": "en-GB", "device": None, "proxies": [], "delay_range": [0, 0],
-    "city_geolocation": True,
+    "city_geolocation": False,
+    "network_guard": {"enabled": True, "interval_seconds": 30, "timeout_ms": 8000},
     "target": {"lat": None, "lng": None, "timezone": "Europe/London"},
     "timeouts": {"navigation_ms": 45000, "element_ms": 15000},
 }
@@ -31,7 +32,7 @@ def validate_config(values):
         raise ConfigError("Unknown config setting: " + ", ".join(sorted(unknown)))
     cfg = copy.deepcopy(DEFAULTS)
     for key, value in values.items():
-        if key in {"target", "timeouts"}:
+        if key in {"target", "timeouts", "network_guard"}:
             if not isinstance(value, dict):
                 raise ConfigError(f"{key} must be an object.")
             allowed = cfg[key].keys() | ({"name"} if key == "target" else set())
@@ -44,6 +45,12 @@ def validate_config(values):
         raise ConfigError("mode must be poster or extension.")
     if type(cfg["city_geolocation"]) is not bool:
         raise ConfigError("city_geolocation must be true or false.")
+    guard = cfg["network_guard"]
+    if type(guard["enabled"]) is not bool:
+        raise ConfigError("network_guard.enabled must be true or false.")
+    for key, minimum, maximum in (("interval_seconds", 15, 120), ("timeout_ms", 2000, 15000)):
+        if type(guard[key]) is not int or not minimum <= guard[key] <= maximum:
+            raise ConfigError(f"network_guard.{key} must be {minimum}..{maximum}.")
     if type(cfg["port"]) is not int or not 1 <= cfg["port"] <= 65535:
         raise ConfigError("port must be a whole number from 1 to 65535.")
     if cfg["browser_channel"] not in ("chrome", "msedge", "chromium"):

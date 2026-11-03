@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Tasmee · Unlock private dashboard</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='unlock.js') }}" defer></script>
+</head>
+<body>
+<header class="topbar"><div class="brand">Tasmee <span class="brand-sub">Personal reviews</span></div><span class="local-badge">Private dashboard</span></header>
+<main>
+  <div class="page-heading"><div><p class="eyebrow">LOCAL SESSION PROTECTION</p><h1>Unlock your dashboard</h1><p class="muted">App ke terminal mein diya gaya private link kholein, ya us link ka private code neeche paste karein. Yeh Google password nahi hai.</p></div></div>
+  <section class="composer" aria-labelledby="unlockTitle">
+    <div class="section-heading"><h2 id="unlockTitle">Private code</h2><span class="badge">Locked</span></div>
+    <form id="unlockForm">
+      <div class="field"><label for="unlockCode">Code after #unlock= in the private link</label><input id="unlockCode" type="password" autocomplete="off" spellcheck="false" maxlength="128" required aria-describedby="unlockHint unlockError"><p id="unlockHint" class="hint">Har server restart par naya code hota hai. Code/link kisi ke saath share na karein. Access 8 ghante baad expire hota hai.</p><p id="unlockError" class="field-error" role="alert" hidden></p></div>
+      <button id="unlockButton" class="button primary" type="submit">Unlock dashboard</button>
+      <p id="unlockStatus" class="hint" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+  <noscript><p class="error-summary">Dashboard unlock karne ke liye is local page par JavaScript enable karein.</p></noscript>
+  <footer class="page-footer">Locked dashboard account, review history aur browser controls expose nahi karta. Windows lock aur protected local files bhi zaroori hain.</footer>
+</main>
+</body>
+</html>

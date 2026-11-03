@@ -42,8 +42,9 @@ class NormalChromeApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name, config={"mode": "extension"})
+        self.app = create_app(self.temp.name, config={"mode": "extension", "network_guard": {"enabled": False}})
         self.client = self.app.test_client()
+        self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get('/')
         with self.client.session_transaction() as state:
             self.headers = {'X-CSRF-Token':state['csrf']}
@@ -122,7 +123,7 @@ class NormalChromeApiTests(unittest.TestCase):
 
     def test_extension_result_is_single_and_uncertainty_stays_unconfirmed(self):
         review=self.make_review();base=f"/api/reviews/{review['id']}"
-        token={'confirmation_token':review['confirmation_token']}
+        token={'confirmation_token':review['confirmation_token'], 'policy_confirmed':True}
         proof={**token,'assertion':self.assertion(review)}
         self.assertEqual(self.client.post(base+'/prepared',headers=self.headers,json=proof).status_code,200)
         self.assertEqual(self.client.post(base+'/publish',headers=self.headers,json=token).status_code,202)
@@ -143,7 +144,7 @@ class NormalChromeApiTests(unittest.TestCase):
 
     def test_reconcile_requires_matching_saved_proof_and_cannot_repost(self):
         review=self.make_review();base=f"/api/reviews/{review['id']}"
-        token={'confirmation_token':review['confirmation_token']}
+        token={'confirmation_token':review['confirmation_token'], 'policy_confirmed':True}
         proof={**token,'assertion':self.assertion(review)}
         self.client.post(base+'/prepared',headers=self.headers,json=proof)
         self.client.post(base+'/publish',headers=self.headers,json=token)
@@ -173,7 +174,7 @@ class RealExtensionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app=create_app(Path(self.temp.name)/'data', config={"mode": "extension"})
+        self.app=create_app(Path(self.temp.name)/'data', config={"mode": "extension", "network_guard": {"enabled": False}})
         self.server=make_server('127.0.0.1',0,self.app,threaded=True)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()
@@ -226,7 +227,7 @@ class RealExtensionTests(unittest.TestCase):
         self.page=self.context.new_page()
         self.errors=[]
         self.page.on('pageerror',lambda error:self.errors.append(str(error)))
-        self.page.goto(f'http://127.0.0.1:{self.server.server_port}/')
+        self.page.goto(f"http://127.0.0.1:{self.server.server_port}/#unlock={self.app.extensions['dashboard_token']}")
         self.page.bring_to_front()
         self.page.get_by_text('Chrome extension connected',exact=True).wait_for(timeout=10000)
 
@@ -251,16 +252,16 @@ class RealExtensionTests(unittest.TestCase):
         self.page.locator('#text').fill('My genuine visit.\nThe staff were helpful.')
         self.page.get_by_role('button',name='Start',exact=False).click()
         self.page.get_by_role('button',name='Post this review',exact=True).wait_for(timeout=15000)
-        if open_details:
+        if open_details and not self.page.locator('#previewDetails').evaluate('(node)=>node.open'):
             self.page.locator('#previewDetails > summary').click()
         return next(page for page in self.context.pages if '/maps/place/' in page.url)
 
-    def test_auto_business_name_and_optional_preview(self):
+    def test_auto_business_name_and_expanded_confirmation_preview(self):
         self.connect()
         maps=self.prepare(name='Outdated name',open_details=False)
         self.assertEqual(self.page.locator('#expected_name').input_value(),'My Market')
         self.assertEqual(self.page.locator('#previewBusiness').inner_text(),'My Market')
-        self.assertFalse(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
+        self.assertTrue(self.page.locator('#previewDetails').evaluate('(node)=>node.open'))
         self.assertTrue(self.page.get_by_role('button',name='Post this review',exact=True).is_visible())
         self.assertEqual(maps.evaluate('window.posts'),0)
 
@@ -291,6 +292,7 @@ class RealExtensionTests(unittest.TestCase):
         self.assertEqual(self.page.locator('#previewAddress').inner_text(),'Main Road, Karachi')
         self.assertFalse(self.page.locator('#previewCoordinates').is_visible())
         self.assertFalse(self.page.locator('#visibilityNotice').is_visible())
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for(timeout=15000)
         self.assertEqual(maps.evaluate('window.posts'),1)
@@ -302,6 +304,7 @@ class RealExtensionTests(unittest.TestCase):
         self.connect();maps=self.prepare()
         maps.get_by_role('radio',name='1 star',exact=True).click()
         self.page.bring_to_front()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Needs attention',exact=True).wait_for(timeout=10000)
         self.assertEqual(maps.evaluate('window.posts'),0)
@@ -344,6 +347,7 @@ class RealExtensionTests(unittest.TestCase):
 
     def test_saved_own_review_card_confirms_without_success_toast(self):
         self.saved_card_fixture();self.connect();maps=self.prepare()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for(timeout=10000)
         self.assertEqual(maps.evaluate('window.posts'),1)
@@ -387,6 +391,7 @@ class RealExtensionTests(unittest.TestCase):
             ".innerHTML=window.savedCard;document.querySelector('#widget-frame').remove()")
         self.fixture=self.fixture.replace('</body>','<script>window.savedCard='+json.dumps(SAVED_CARD)+'</script></body>')
         self.connect();maps=self.prepare()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for(timeout=10000)
         self.assertEqual(maps.evaluate('window.posts'),1)
@@ -397,6 +402,7 @@ class RealExtensionTests(unittest.TestCase):
         self.fixture=self.fixture.replace(".textContent='Your review has been posted.'",
             ".textContent='';document.querySelector('#widget-frame').remove()")
         self.connect();maps=self.prepare()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Check Google Maps',exact=True).wait_for(timeout=25000)
         self.assertEqual(maps.evaluate('window.posts'),1)
@@ -437,6 +443,7 @@ class RealExtensionTests(unittest.TestCase):
             'My genuine visit.\nThe staff were helpful.')
         self.assertEqual(maps.evaluate('window.posts'),0)
         self.assertEqual(self.page.locator('#previewAddress').inner_text(),'Main Road, Karachi')
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Success',exact=True).wait_for(timeout=10000)
         self.assertEqual(maps.evaluate('window.posts'),1)
@@ -448,6 +455,7 @@ class RealExtensionTests(unittest.TestCase):
         maps.frame_locator('#widget-frame').get_by_role('radiogroup',name='Rating stars',exact=True)\
             .get_by_role('radio',name='One star',exact=True).click()
         self.page.bring_to_front()
+        self.page.locator('#policy_confirmed').check()
         self.page.get_by_role('button',name='Post this review',exact=True).click()
         self.page.locator('#reviewStatus').get_by_text('Needs attention',exact=True).wait_for(timeout=10000)
         self.assertEqual(maps.evaluate('window.posts'),0)

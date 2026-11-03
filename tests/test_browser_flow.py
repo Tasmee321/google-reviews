@@ -47,7 +47,7 @@ class BrowserFlowTests(unittest.TestCase):
         self.context = self.browser.new_context()
         self.addCleanup(self.context.close)
         self.store = ReviewStore(self.directory.name)
-        self.worker = ReviewWorker(self.store)
+        self.worker = ReviewWorker(self.store, {"network_guard": {"enabled": False}})
         self.worker._context = self.context
         self.page_html = fixture()
         self.context.route("https://www.google.com/**", lambda route: route.fulfill(

@@ -1,4 +1,5 @@
 "use strict";
+if(location.hash.startsWith("#unlock=")) history.replaceState(null,"",location.pathname+location.search);
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const selectedBrowser=document.querySelector('meta[name="review-browser"]')?.content || "chrome";
@@ -17,6 +18,7 @@ const storageKey = "tasmee.personal-review.draft.v1";
 let extensionInstalled=false, extensionChecked=false;
 let policyRequest=0;
 let changingCity=false, statusLoaded=false;
+let policyReviewId=null;
 
 function clearPolicyWarnings() {
   policyRequest++;
@@ -84,7 +86,7 @@ async function api(path, data) {
   return result;
 }
 function errors(fields={}) {
-  for (const key of ["target","expected_name","text","stars","email"]) {
+  for (const key of ["target","expected_name","text","stars","email","policy_confirmed"]) {
     const errorNode = $(key + "Error");
     if (errorNode) { errorNode.hidden = !fields[key]; errorNode.textContent = fields[key] || ""; }
     if ($(key)) $(key).setAttribute("aria-invalid", fields[key] ? "true" : "false");
@@ -151,6 +153,8 @@ function controls() {
   $("checkButton").disabled=requesting || browser.busy || Boolean(active);
   $("email").disabled=requesting || browser.busy || Boolean(active);
   $("publishButton").disabled=requesting || browser.busy;
+  $("policy_confirmed").disabled=browser.busy;
+  if($("networkCheckButton")) $("networkCheckButton").disabled=requesting || browser.busy || Boolean(active);
   $("reconcileButton").disabled=requesting || browser.busy || Boolean(active);
   $("checkSavedButton").disabled=locked || browser.busy;
   $("accountSelect").disabled=locked || browser.busy;
@@ -162,6 +166,10 @@ function controls() {
   const capable=extensionCapabilities.includes("saved_checks");
   badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? (browser.transport==="poster" ? "Unavailable" : "Needs signed 1.0.6") : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
   renderCityLocation();
+  if($("networkStatus")) {
+    const network=browser.network;
+    $("networkStatus").textContent=network ? network.message+(network.checked_at ? " Last check: "+new Date(network.checked_at).toLocaleTimeString() : "") : "UK-IP check unavailable.";
+  }
 }
 function renderCityLocation(syncSelection=false) {
   const node=$("cityLocation");if(!node) return;
@@ -182,6 +190,21 @@ function renderPreview() {
   if(signature===lastPreview) { controls(); return; }
   lastPreview=signature;
   $("previewEmpty").hidden=Boolean(review); $("previewContent").hidden=!review;
+  const ready=review?.status==="ready";
+  $("policyConfirmation").hidden=!ready;
+  if(!ready || policyReviewId!==review?.id) {
+    $("policy_confirmed").checked=false;
+    $("policy_confirmedError").hidden=true;
+    policyReviewId=ready ? review.id : null;
+    $("preparedPolicyWarnings").replaceChildren();
+    if(ready) {
+      $("previewDetails").open=true;
+      const reviewId=review.id;
+      api("/api/reviews/preflight",{text:review.text,review_id:reviewId}).then(result=>{
+        if(policyReviewId===reviewId) $("preparedPolicyWarnings").replaceChildren(...result.warnings.map(warning=>element("li","",warning.message)));
+      }).catch(error=>notice(error.message,true));
+    }
+  }
   badge($("reviewStatus"),review?.status || "idle",review ? undefined : "No review yet");
   if (!review) return;
   $("previewBusiness").textContent=review.business_name || review.expected_name;
@@ -346,6 +369,14 @@ $("checkButton").addEventListener("click",()=>action(async()=>{
     await api("/api/browser/verified",{email:result.email,browser_kind:extension.browser_kind});
   }
 }));
+$("networkCheckButton")?.addEventListener("click",()=>action(async()=>{
+  const result=await api("/api/browser/network",{});
+  notice(result.network.message);
+}));
+$("policy_confirmed").addEventListener("change",()=>{
+  $("policy_confirmedError").hidden=true;
+  $("policy_confirmed").removeAttribute("aria-invalid");
+});
 $("reviewForm").addEventListener("submit",event=>{
   event.preventDefault(); errors();
   action(async()=>{
@@ -392,7 +423,13 @@ $("reviewForm").addEventListener("submit",event=>{
 $("publishButton").addEventListener("click",()=>action(async()=>{
   const review=reviews.find(r=>r.id===selectedId);
   if(!review || review.status!=="ready") throw new Error("Prepare the review before posting.");
-  const result=await api("/api/reviews/"+review.id+"/publish",{confirmation_token:review.confirmation_token});
+  if(!$("policy_confirmed").checked) {
+    $("policy_confirmedError").hidden=false;
+    $("policy_confirmedError").textContent="Check this exact review and confirm the policy points before posting.";
+    $("policy_confirmed").setAttribute("aria-invalid","true");
+    $("policy_confirmed").focus();return;
+  }
+  const result=await api("/api/reviews/"+review.id+"/publish",{confirmation_token:review.confirmation_token,policy_confirmed:true});
   if(result.requires_extension) {
     try {
       const checked=await extensionRequest("verify",{review:result.review});

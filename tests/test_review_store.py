@@ -199,7 +199,7 @@ class ConnectionErrorTests(unittest.TestCase):
         from unittest.mock import MagicMock
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.worker = ReviewWorker(ReviewStore(self.directory.name))
+        self.worker = ReviewWorker(ReviewStore(self.directory.name), {"network_guard": {"enabled": False}})
         self.page = MagicMock()
         self.worker._new_page = lambda: self.page
         self.worker._consent = MagicMock()
@@ -222,8 +222,9 @@ class ApiTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.app = create_app(self.directory.name, FakeWorker)
+        self.app = create_app(self.directory.name, FakeWorker, config={"network_guard": {"enabled": False}})
         self.client = self.app.test_client()
+        self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get("/")
         with self.client.session_transaction() as session:
             self.token = session["csrf"]
@@ -248,7 +249,7 @@ class ApiTests(unittest.TestCase):
         worker = self.app.extensions["review_worker"]
         self.assertEqual(worker.actions, [("prepare", review["id"])])
         path = f"/api/reviews/{review['id']}/publish"
-        token = {"confirmation_token": review["confirmation_token"]}
+        token = {"confirmation_token": review["confirmation_token"], "policy_confirmed": True}
         self.assertEqual(self.client.post(path, json=token, headers=self.headers).status_code, 409)
         self.app.extensions["review_store"].update(review["id"], status="ready")
         self.assertEqual(self.client.post(path, json={"confirmation_token": "wrong"}, headers=self.headers).status_code, 409)
