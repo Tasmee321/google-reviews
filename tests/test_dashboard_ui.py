@@ -92,6 +92,31 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#formErrors a").count(), 1)
         self.assertEqual(self.page.locator('#formErrors a[href="#target"]').count(), 1)
 
+    def test_policy_advisories_preserve_text_and_allow_genuine_negative_reviews(self):
+        text = 'Service was slow. Contact private@example.com.'
+        self.page.locator('#text').fill(text)
+        self.page.locator('#target').focus()
+        self.page.locator('#policyWarnings').wait_for(state='visible')
+        self.assertIn('Email address detected', self.page.locator('#policyWarnings').inner_text())
+        self.assertEqual(self.page.locator('#text').input_value(), text)
+        self.assertEqual(self.worker.actions, [])
+        self.page.locator('#text').fill('Service was slow and the food was cold.')
+        self.page.locator('#target').focus()
+        self.page.locator('#policyWarnings').wait_for(state='hidden')
+        self.page.locator('#policyGuide summary').click()
+        self.assertIn('available appeal', self.page.locator('#policyGuide').inner_text())
+        self.page.locator('#text').fill(text)
+        self.page.locator('#target').focus()
+        self.page.locator('#policyWarnings').wait_for(state='visible')
+        folder = Path(__file__).resolve().parents[1] / 'test-results'
+        folder.mkdir(exist_ok=True)
+        for width in (375, 768, 1440):
+            self.page.set_viewport_size({'width': width, 'height': 950})
+            self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'), width)
+            if width in (375, 1440):
+                self.page.screenshot(path=str(folder / f'policy-guidance-{width}.png'), full_page=True)
+        self.assertEqual(self.errors, [])
+
     def test_refresh_clears_draft_and_rating_keyboard_input(self):
         self.fill_review("Real visit.\nMy own words.")
         self.page.evaluate("localStorage.setItem('tasmee.personal-review.draft.v1', JSON.stringify({target:'old',expected_name:'Old',text:'old draft',stars:5}))")

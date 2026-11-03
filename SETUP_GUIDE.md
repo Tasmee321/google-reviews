@@ -29,8 +29,9 @@ remains available explicitly through `run_chrome.bat`.
    https://support.avast.com/en-gb/article/63/.
 3. Double-click `run.bat`. If the dedicated Firefox profile is already open,
    use its existing dashboard tab; close that dedicated window before relaunching.
-4. Load `firefox_extension/manifest.json` with Firefox's **about:debugging →
-   This Firefox → Load Temporary Add-on**, then refresh the dashboard.
+4. Check **about:addons** in that profile. If signed Tasmee 1.0.6 is already
+   installed and active, keep it and refresh the dashboard. Otherwise install
+   a Mozilla-signed XPI through **Install Add-on From File**.
 5. Complete Google sign-in yourself in this same Firefox profile. Later runs can
    reuse its cookies; Google may still require fresh verification.
 
@@ -38,7 +39,8 @@ The Firefox build is **unsigned**. Normal Firefox requires Mozilla signing for
 permanent add-on installation. Temporary installation ends when Firefox closes;
 the underlying profile and login cookies are not deleted. Permanent installation
 requires the account owner's Mozilla developer account, agreement to Mozilla's
-distribution terms, signing submission and a signed XPI. This has not been done.
+distribution terms, signing submission and a signed XPI. The build script does
+not sign or install add-ons; a previously installed signed copy is separate.
 The launcher does not disable signature checks or use a developer browser to bypass them.
 
 Rebuild after source changes with `python build_firefox_extension.py`. The build
@@ -69,9 +71,10 @@ python build_firefox_extension.py
 python app.py
 ```
 
-## Google sign-in and 2FA
+## Google sign-in and 2FA — optional Chrome mode
 
-The dashboard now uses your **normal Chrome** session. It does not launch a browser controlled by Playwright for Google sign-in.
+This section is only for `run_chrome.bat`. The recommended `run.bat` uses your
+dedicated Firefox profile. Neither extension workflow uses Playwright for Google sign-in.
 
 One-time extension setup:
 1. Open **chrome://extensions** in normal Chrome.
@@ -136,7 +139,9 @@ There are no automatic submission retries. Repeated clicks cannot submit the sam
 ## Storage and configuration
 
 - `personal_data/reviews.sqlite3`: local history and drafts.
-- The Google session stays in your normal Chrome profile. The older `personal_data/browser/` folder is no longer used by the default dashboard.
+- In the recommended Firefox mode, Google session state stays in
+  `personal_data/firefox-profile/`. Optional Chrome mode uses your normal Chrome
+  profile. The older `personal_data/browser/` folder is not used by the default launcher.
 - The composer is not persisted in browser storage. Refresh clears stale fields/preview while keeping history and active-job state.
 - Google credentials from the old `accounts.json` are not used.
 - Old `accounts.json`, `targets.json`, `env` and `.env` are preserved. Remove legacy secrets yourself if you no longer need them.
@@ -146,7 +151,11 @@ Optional settings in `.env`:
 ```dotenv
 PORT=5000
 ```
-Use normal Google Chrome with the local extension for the default dashboard. `BROWSER_CHANNEL` belongs to the older controlled-browser engine and is not used by the new connection flow. For the extension's isolated browser tests, install test Chromium with `python -m playwright install chromium` when needed.
+Use `run.bat` for dedicated Firefox. If starting `python app.py` directly, set
+`REVIEW_BROWSER=firefox`; without that setting the legacy default is Chrome.
+`BROWSER_CHANNEL` belongs to the older controlled-browser engine and is not used
+by the extension flow. For isolated browser tests, install test Chromium with
+`python -m playwright install chromium` when needed.
 
 Old bulk-posting settings such as proxies, headless mode, daily limits and review spinners are no longer used. The application binds to 127.0.0.1 and accepts only requests from this computer. Cloud/Render deployment is not supported because sign-in needs a visible local browser.
 
@@ -172,10 +181,12 @@ not verify a live Firefox/Google sign-in or public review visibility.
 Default launcher is `run.bat` -> dedicated ordinary Firefox. Existing signed
 `dist/tasmee-firefox-1.0.5.xpi` is preserved. Dashboard-only history, address
 counts, confirmation dialog and success-only form reset work with 1.0.5.
-Background saved-review checks and direct account selection need the new 1.0.6
-extension: submit `dist/tasmee-firefox-1.0.6-unsigned.xpi` and
-`dist/tasmee-firefox-1.0.6-source.zip` to Mozilla using the same add-on ID and
-private distribution, then install the resulting signed XPI through about:addons.
+Background saved-review checks and direct account selection need version 1.0.6.
+If signed 1.0.6 is already active in about:addons, no reinstall is needed.
+Only when building a new extension release, submit its unsigned XPI and source
+to Mozilla using the same add-on ID and private distribution. For version 1.0.6,
+these files are `dist/tasmee-firefox-1.0.6-unsigned.xpi` and
+`dist/tasmee-firefox-1.0.6-source.zip`. Install the resulting signed XPI through about:addons.
 Never disable Firefox signing or replace the permanent add-on with an unsigned
 temporary installation. Signing/manual review completion is not assumed.
 

@@ -5,6 +5,7 @@ import secrets
 import io
 import zipfile
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -15,6 +16,7 @@ from review_store import ReviewStore, ReviewError, validate_review, valid_email,
 from browser_bridge import BrowserBridge, open_normal_chrome
 from personal_browser import browser_kind, open_firefox_dashboard
 from build_firefox_extension import firefox_archive
+from review_policy import review_warnings, POLICY_URL, QUALITY_URL, APPEAL_URL
 
 ROOT = Path(__file__).resolve().parent
 
@@ -99,6 +101,7 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
         session.setdefault("csrf", secrets.token_urlsafe(32))
         kind = getattr(worker, "browser_kind", "chrome")
         return render_template("index.html", csrf=session["csrf"], browser_kind=kind,
+                               policy_url=POLICY_URL, quality_url=QUALITY_URL, appeal_url=APPEAL_URL,
                                extension_path=str(ROOT / ("firefox_extension" if kind == "firefox" else "chrome_extension")))
 
     @app.get("/api/status")
@@ -204,10 +207,17 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
     def verified_browser():
         if not getattr(worker, "extension_mode", False):
             raise ReviewError("This connection method is unavailable.", 409)
-        if store.active():
-            raise ReviewError("Finish or cancel the current review first.", 409)
         worker.connect(body())
         return jsonify(ok=True)
+
+    @app.post("/api/reviews/preflight")
+    def review_preflight():
+        text = body().get("text")
+        if not isinstance(text, str) or len(text) > 4000:
+            raise ReviewError("Review text must be a string of at most 4,000 characters.",
+                              fields={"text": "Enter at most 4,000 characters."})
+        return jsonify(ok=True, warnings=review_warnings(text, store.has_matching_text(text)),
+                       message="Local advisory checks only. No warnings does not mean Google approved the review.")
 
     @app.post("/api/reviews")
     def prepare():
@@ -267,7 +277,17 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
             raise ReviewError("Invalid review confirmation.", 409)
         return data, review
 
+    def extension_callback(handler):
+        @wraps(handler)
+        def guarded(review_id):
+            if not getattr(worker, "extension_mode", False):
+                raise ReviewError("Extension transport is unavailable.", 409)
+            with worker.review_action(review_id):
+                return handler(review_id)
+        return guarded
+
     @app.post("/api/reviews/<review_id>/prepared")
+    @extension_callback
     def prepared(review_id):
         data, review = extension_review(review_id)
         if review["status"] != "preparing":
@@ -275,19 +295,22 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
         details = worker.validate_assertion(review_id, data.get("assertion", {}))
         store.update(review_id, **details)
         store.transition(review_id, "preparing", "ready", "The browser verified the business, account, exact text and rating. Ready for your confirmation.")
-        worker.finish()
+        worker.finish(review_id)
         return jsonify(ok=True)
 
     @app.post("/api/reviews/<review_id>/submitting")
+    @extension_callback
     def submitting(review_id):
         data, review = extension_review(review_id)
         if review["status"] != "publishing":
             raise ReviewError("This review is no longer waiting for submission.", 409)
         worker.validate_assertion(review_id, data.get("assertion", {}))
         store.transition(review_id, "publishing", "submitting", "Submitting once in your verified browser session.")
+        worker.renew_operation(review_id)
         return jsonify(ok=True)
 
     @app.post("/api/reviews/<review_id>/result")
+    @extension_callback
     def submission_result(review_id):
         data, review = extension_review(review_id)
         if review["status"] != "submitting":
@@ -296,10 +319,11 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
         store.transition(review_id, "submitting", "posted" if confirmed else "unconfirmed",
                          "Google explicitly confirmed submission. Google may still moderate public visibility."
                          if confirmed else "Google did not show a clear confirmation. Check your contributions before posting again.")
-        worker.finish()
+        worker.finish(review_id)
         return jsonify(ok=True)
 
     @app.post("/api/reviews/<review_id>/failure")
+    @extension_callback
     def extension_failure(review_id):
         data, review = extension_review(review_id)
         if review["status"] not in {"preparing", "publishing", "submitting"}:
@@ -310,7 +334,7 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
         uncertain = review["status"] == "submitting"
         store.transition(review_id, review["status"], "unconfirmed" if uncertain else "failed",
                          "Submission may have reached Google. Check contributions before trying again." if uncertain else message[:600])
-        worker.finish()
+        worker.finish(review_id)
         return jsonify(ok=True)
 
     @app.post("/api/reviews/<review_id>/reconcile")
@@ -342,15 +366,14 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
             if data.get("automatic") is True:
                 store.claim_auto_check(review_id)
         except ReviewError:
-            worker.release_check()
+            worker.release_check(review_id, token)
             raise
         return jsonify(ok=True, verification_token=token, review=review)
 
     @app.post("/api/reviews/<review_id>/check-result")
     def saved_check_result(review_id):
         data, review = extension_review(review_id)
-        worker.check_reservation(review_id, data.get("verification_token"))
-        try:
+        with worker.saved_check_result(review_id, data.get("verification_token")):
             matched = data.get("matched") is True
             if matched:
                 assertion = data.get("assertion", {})
@@ -363,15 +386,15 @@ def create_app(data_dir=None, worker_factory=BrowserBridge):
             else:
                 store.record_saved_check(review_id, False,
                     "The saved review could not be verified. It may be hidden, changed or the page may not have loaded. This is not proof of deletion; no repost was attempted.")
-        finally:
-            worker.release_check()
         return jsonify(ok=True, review=store.get(review_id))
 
     @app.post("/api/reviews/<review_id>/cancel")
     def cancel(review_id):
         body()
         review = store.get(review_id)
-        if review["status"] == "ready":
+        if getattr(worker, "extension_mode", False):
+            worker.cancel(review_id)
+        elif review["status"] == "ready":
             if worker.snapshot()["busy"]:
                 raise ReviewError("The browser is busy.", 409)
             store.transition(review_id, "ready", "cancelled", "Review cancelled. Nothing was submitted.")

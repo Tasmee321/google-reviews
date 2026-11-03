@@ -51,9 +51,23 @@
           </fieldset>
           <div class="field">
             <div class="label-row"><label for="text">Your review</label><span id="characterCount" class="hint">0 / 4,000</span></div>
-            <textarea id="text" name="text" rows="7" maxlength="4000" placeholder="What was your experience? Share it in your own words." required aria-describedby="textHint textError"></textarea>
+            <textarea id="text" name="text" rows="7" maxlength="4000" placeholder="What was your experience? Share it in your own words." required aria-describedby="textHint textError policyHint"></textarea>
             <p id="textHint" class="hint">Aap ka exact text use hoga. Success aur refresh par fields clear ho jayengi; pending par nahi.</p>
             <p id="textError" class="field-error" hidden></p>
+            <p id="policyHint" class="hint">Apna asli, specific tajurba likhein; positive ya negative dono theek hain. Links, contact/private details, paid reviews aur repeated content se parhez karein.</p>
+            <div id="policyWarnings" class="error-summary" role="status" aria-live="polite" hidden>
+              <strong>Review these items before posting</strong><ul id="policyWarningList"></ul>
+              <p class="hint">Local reminders only; text khud change nahi hota. No warnings ka matlab Google approval nahi.</p>
+            </div>
+            <details id="policyGuide"><summary>Google review guidance &amp; missing-review help</summary>
+              <ul><li>Sirf apna firsthand experience, sahi branch aur sachchi rating. Spelling check karein; facts invent na karein.</li>
+                <li>Payment, discount, free item ya business/employment/family conflict ho to review submit na karein. Multiple accounts se rating influence na karein.</li>
+                <li>Respectful criticism allowed hai; abuse, advertising aur doosron ki private details se parhez karein.</li>
+                <li>Publication mein kuch din lag sakte hain. Missing review ko automatically repost na karein; Google Maps profile mein status check karein.</li>
+                <li>Removal ghalat lage to available appeal use karein. Appeal ke baad Google review edit/delete karne se appeal cancel ho sakti hai.</li></ul>
+              <p><a href="{{ policy_url }}" target="_blank" rel="noopener noreferrer">Official content policy ↗</a> · <a href="{{ quality_url }}" target="_blank" rel="noopener noreferrer">Writing tips ↗</a> · <a href="{{ appeal_url }}" target="_blank" rel="noopener noreferrer">Appeal guidance ↗</a></p>
+              <p class="hint">Public visibility ya permanent publication ki guarantee nahi. VPN/location changes approval ka proof nahi; fake engagement ke liye sensor manipulation prohibited hai.</p>
+            </details>
           </div>
         </fieldset>
         <div class="form-footer"><button id="prepareButton" class="button primary" type="submit">Start <span aria-hidden="true">→</span></button><p class="hint">Naam auto-fetch aur review auto-prepare. Post abhi nahi hoga.</p></div>
@@ -66,7 +80,7 @@
         <details id="extensionSetup" class="extension-setup" hidden open>
           <summary>{{ 'Connect your dedicated Firefox' if browser_kind == 'firefox' else 'Connect your normal Chrome' }}</summary>
           {% if browser_kind == 'firefox' %}
-          <ol><li>Permanent extension ko <strong>about:addons</strong> se install karein.</li><li>Mozilla-signed XPI use karein; nayi 1.0.6 source ko pehle Mozilla se sign karwana hoga. Existing signed 1.0.5 ko unsigned file se replace na karein.</li></ol>
+          <ol><li><strong>about:addons</strong> mein installed Tasmee version check karein; signed 1.0.6 active hai to dobara install na karein.</li><li>Nayi extension source ke liye Mozilla-signed XPI chahiye. Existing signed add-on ko unsigned file se replace na karein.</li></ol>
           {% else %}
           <ol><li>Open <strong>chrome://extensions</strong> in normal Chrome.</li><li>Enable Developer mode, click <strong>Load unpacked</strong>, and select this folder:</li></ol>
           {% endif %}

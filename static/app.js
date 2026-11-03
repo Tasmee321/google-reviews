@@ -15,6 +15,21 @@ let nextCheckAt=Date.now()+60000;
 try {nextCheckAt=Math.max(nextCheckAt, Number(localStorage.getItem(cadenceKey)) || 0);} catch {}
 const storageKey = "tasmee.personal-review.draft.v1";
 let extensionInstalled=false, extensionChecked=false;
+let policyRequest=0;
+
+function clearPolicyWarnings() {
+  policyRequest++;
+  $("policyWarnings").hidden=true;
+  $("policyWarningList").replaceChildren();
+}
+async function checkReviewPolicy() {
+  const text=$("text").value, requestId=++policyRequest;
+  if(!text.trim()) {clearPolicyWarnings();return;}
+  const result=await api("/api/reviews/preflight",{text});
+  if(requestId!==policyRequest || $("text").value!==text) return;
+  $("policyWarningList").replaceChildren(...result.warnings.map(warning=>element("li","",warning.message)));
+  $("policyWarnings").hidden=!result.warnings.length;
+}
 
 function extensionRequest(action,data={},timeout=150000) {
   return new Promise((resolve,reject)=>{
@@ -104,6 +119,7 @@ function clearComposer() {
   document.querySelectorAll('input[name="stars"]').forEach(node=>node.checked=false);
   try { localStorage.removeItem(storageKey); } catch {}
   resolvedBusiness=null;draftReviewId=null;
+  clearPolicyWarnings();
   errors();saveDraft();
 }
 function clearDraft() {
@@ -330,6 +346,7 @@ $("reviewForm").addEventListener("submit",event=>{
     if(!data.stars) invalid.stars="Select a rating from 1 to 5 stars.";
     if(!data.text) invalid.text="Write your review.";
     if(Object.keys(invalid).length) {errors(invalid);return;}
+    await checkReviewPolicy();
     const result=await api("/api/reviews",data);
     selectedId=result.review.id;draftReviewId=result.review.id;lastPreview="";
     if(result.requires_extension) {
@@ -375,6 +392,8 @@ $('copyExtensionPath').addEventListener('click',async()=>{
   catch {notice('Select and copy the folder path shown in the setup instructions.',true);}
 });
 $("reviewForm").addEventListener("input",saveDraft);
+$("text").addEventListener("input",clearPolicyWarnings);
+$("text").addEventListener("blur",()=>{checkReviewPolicy().catch(()=>{});});
 $("reviewForm").addEventListener("input",()=>{if(draftReviewId && !reviews.some(r=>r.id===draftReviewId && activeStates.has(r.status))) draftReviewId=null;});
 $("target").addEventListener("input",()=>{
   $("expected_name").value="";

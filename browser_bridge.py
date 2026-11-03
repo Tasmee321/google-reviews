@@ -6,6 +6,7 @@ import threading
 import secrets
 import time
 import webbrowser
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -29,14 +30,16 @@ def open_normal_chrome(url):
 
 class BrowserBridge:
     extension_mode = True
+    ACTION_TIMEOUT = 180
 
     def __init__(self, store):
         self.store = store
         self.browser_kind = browser_kind()
         self.browser_label = "Firefox" if self.browser_kind == "firefox" else "Chrome"
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.expected_email = ""
         self.verification = None
+        self.operation = None
         self.state = {"status": "disconnected", "email": "", "busy": False, "transport": "extension",
                       "browser_kind": self.browser_kind,
                       "message": f"Sign in in {self.browser_label}, then check connection. Load the Tasmee extension in that same browser."}
@@ -47,9 +50,35 @@ class BrowserBridge:
             return dict(self.state)
 
     def _expire_verification(self):
-        if self.verification and self.verification["expires"] < time.monotonic():
+        stamp = time.monotonic()
+        if self.verification and self.verification["expires"] <= stamp:
             self.verification = None
-            self.state["busy"] = False
+            self.state["busy"] = self.operation is not None
+        if self.operation and self.operation["expires"] <= stamp:
+            review = self.store.get(self.operation["id"])
+            if review["status"] in {"queued", "preparing", "publishing", "submitting"}:
+                uncertain = review["status"] == "submitting"
+                self.store.transition(review["id"], review["status"],
+                    "unconfirmed" if uncertain else "interrupted",
+                    "Browser response timed out after submission was authorized. It may have reached Google. Check the saved review before trying again; no repost was attempted."
+                    if uncertain else "Browser action timed out before submission was authorized. Close the old Maps tab before preparing a new review.")
+            self.operation = None
+            self.state["busy"] = self.verification is not None
+
+    @contextmanager
+    def review_action(self, review_id):
+        """Serialize callbacks with expiry/cancellation; late replies cannot unlock a new job."""
+        with self._lock:
+            self._expire_verification()
+            if not self.operation or self.operation["id"] != review_id:
+                raise ReviewError("This browser action expired or already finished. Refresh and check the review status.", 409)
+            yield
+
+    def renew_operation(self, review_id):
+        with self._lock:
+            if not self.operation or self.operation["id"] != review_id:
+                raise ReviewError("This browser action is no longer active.", 409)
+            self.operation["expires"] = time.monotonic() + self.ACTION_TIMEOUT
 
     def reserve_check(self, review_id):
         with self._lock:
@@ -71,10 +100,21 @@ class BrowserBridge:
                     or not secrets.compare_digest(token, self.verification["token"])):
                 raise ReviewError("Saved-review check expired. Try again when the browser is idle.", 409)
 
-    def release_check(self):
+    def release_check(self, review_id, token):
         with self._lock:
-            self.verification = None
-            self.state["busy"] = False
+            if (self.verification and self.verification["id"] == review_id
+                    and isinstance(token, str) and secrets.compare_digest(token, self.verification["token"])):
+                self.verification = None
+                self.state["busy"] = self.operation is not None
+
+    @contextmanager
+    def saved_check_result(self, review_id, token):
+        with self._lock:
+            self.check_reservation(review_id, token)
+            try:
+                yield
+            finally:
+                self.release_check(review_id, token)
 
     def command(self, action, value=None):
         with self._lock:
@@ -89,8 +129,10 @@ class BrowserBridge:
             elif action == "prepare":
                 self.store.transition(value, "queued", "preparing", f"Checking your {self.browser_label} session and business.")
                 self.state["busy"] = True
+                self.operation = {"id": value, "expires": time.monotonic() + self.ACTION_TIMEOUT}
             elif action == "publish":
                 self.state["busy"] = True
+                self.operation = {"id": value, "expires": time.monotonic() + self.ACTION_TIMEOUT}
             elif action == "discard":
                 self.state["busy"] = False
         if action == "login" and self.browser_kind == "chrome":
@@ -99,18 +141,23 @@ class BrowserBridge:
             }))
 
     def connect(self, assertion):
+        if not isinstance(assertion, dict):
+            raise ReviewError("Expected a Google account verification object.")
         if self.browser_kind == "firefox" and assertion.get("browser_kind") != "firefox":
             raise ReviewError("Open the dashboard in the dedicated Firefox profile, not personal Chrome.", 409)
         email = assertion.get("email", "")
         if not valid_email(email):
             raise ReviewError(f"Google account was not detected. Finish sign-in in {self.browser_label}, then try again.")
         email = email.strip().lower()
-        if self.expected_email and email != self.expected_email:
-            raise ReviewError(f"{self.browser_label} is signed into a different Google account. Switch accounts in Google Maps.", 409)
         with self._lock:
+            self._expire_verification()
+            if self.state["busy"] or self.store.active():
+                raise ReviewError("Finish the current browser action before checking the connection.", 409)
+            if self.expected_email and email != self.expected_email:
+                raise ReviewError(f"{self.browser_label} is signed into a different Google account. Switch accounts in Google Maps.", 409)
             self.state.update(status="connected", email=email, busy=False,
                               message=f"Google account verified in {self.browser_label}. Your browser manages the saved session; VPN protection is not verified by this app.")
-        self.store.remember_account(email)
+            self.store.remember_account(email)
 
     def validate_assertion(self, review_id, assertion):
         review = self.store.get(review_id)
@@ -122,7 +169,7 @@ class BrowserBridge:
                 or type(assertion.get("stars")) is not int or assertion["stars"] != review["stars"]):
             raise ReviewError("The verified account, business, text or rating does not match the draft.", 409)
         url = assertion.get("url")
-        if not isinstance(url, str) or not url.startswith("https://"):
+        if not isinstance(url, str) or len(url) > 2048 or not url.startswith("https://"):
             raise ReviewError("The extension did not verify a Google Maps business URL.")
         url = maps_url(url)
         parsed = urlsplit(url)
@@ -136,14 +183,20 @@ class BrowserBridge:
         return {"business_name": assertion["name"], "business_url": url, "business_key": key,
                 **business_location(url, assertion.get("address", ""))}
 
-    def finish(self):
+    def finish(self, review_id):
         with self._lock:
-            self.state["busy"] = False
+            if self.operation and self.operation["id"] == review_id:
+                self.operation = None
+                self.state["busy"] = self.verification is not None
 
     def cancel(self, review_id):
-        review = self.store.get(review_id)
-        self.store.transition(review_id, review["status"], "cancelled", "Cancelled. Nothing was submitted.")
-        self.finish()
+        with self._lock:
+            self._expire_verification()
+            review = self.store.get(review_id)
+            if review["status"] not in {"queued", "preparing", "ready"}:
+                raise ReviewError("This review cannot be cancelled at its current stage.", 409)
+            self.store.transition(review_id, review["status"], "cancelled", "Cancelled. Nothing was submitted.")
+            self.finish(review_id)
 
     def close(self):
         pass

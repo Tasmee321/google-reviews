@@ -16,6 +16,6 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Installed. Google Chrome is used by default.
+echo Installed. run.bat uses your dedicated ordinary Firefox profile.
 echo Open run.bat to start your personal dashboard.
 pause

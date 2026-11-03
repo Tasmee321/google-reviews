@@ -36,11 +36,17 @@ def valid_email(value):
 
 
 def maps_url(target):
-    parsed = urlsplit(target)
+    if not isinstance(target, str):
+        raise ReviewError("Enter a Google Maps link or business search.")
+    try:
+        parsed = urlsplit(target)
+        port = parsed.port
+    except ValueError as error:
+        raise ReviewError("The Google Maps link is malformed. Check its address and port.") from error
     if parsed.scheme or target.startswith("//") or re.match(r"^(www\.|maps\.|google\.)", target, re.I):
         host = (parsed.hostname or "").lower()
         if (parsed.scheme != "https" or host not in MAP_HOSTS or parsed.username or parsed.password
-                or parsed.port not in (None, 443)):
+                or port not in (None, 443)):
             raise ReviewError("Use a complete HTTPS Google Maps link, or enter a business search.")
         if host == "goo.gl" and not parsed.path.startswith("/maps/"):
             raise ReviewError("Only Google Maps links are supported.")
@@ -185,6 +191,15 @@ class ReviewStore:
     def count(self):
         with self.connect() as db:
             return db.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
+
+    def has_matching_text(self, text):
+        """Advisory only. Deleted payloads are not retained for content matching."""
+        normalized = normalize_name(text)
+        if not normalized:
+            return False
+        with self.connect() as db:
+            return any(normalize_name(row["text"]) == normalized for row in db.execute(
+                "SELECT text FROM reviews WHERE status IN ('posted','submitting','unconfirmed')"))
 
     def _update(self, db, review_id, values):
         if not values.keys() <= {"status", "message", "business_name", "business_url", "business_key",

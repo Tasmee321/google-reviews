@@ -24,10 +24,18 @@ Dashboard: http://127.0.0.1:5000/ . Keep the server terminal open.
 - Verified account shortcuts with one active account at a time.
 - Conservative read-only saved-review monitoring while the dashboard is open.
 - Local-only API, origin/CSRF protection and duplicate/retry safeguards.
+- Expiring browser operations, conservative interrupted-submission recovery,
+  and stale-callback isolation so a lost dashboard response does not lock every new action.
+- Local-only review reminders for links/contact details and repeated wording;
+  official Google quality, moderation-delay and appeal guidance. No automatic rewriting or approval score.
 
 Saved/submitted status does **not** prove public visibility. Google moderates
 reviews independently. VPN protection is neither controlled nor verified by
 this app, and cannot guarantee that a review stays published.
+
+See [GOOGLE_REVIEW_GUIDE.md](GOOGLE_REVIEW_GUIDE.md) for policy-based writing
+guidance and safe update/restart steps. These backend/dashboard changes preserve
+the existing Firefox profile and signed extension; no extension replacement is needed.
 
 ## Build Firefox extension
 
