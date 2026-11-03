@@ -1,2 +1,3 @@
 @echo off
-call "%~dp0run_firefox.bat"
+call "%~dp0start_localhost.bat"
+exit /b %errorlevel%

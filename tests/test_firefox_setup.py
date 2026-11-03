@@ -68,7 +68,7 @@ class FirefoxSetupTests(unittest.TestCase):
 
     def firefox_app(self):
         with patch.dict(os.environ, {"REVIEW_BROWSER": "firefox"}):
-            app = create_app(Path(self.temp.name) / "data")
+            app = create_app(Path(self.temp.name) / "data", config={"mode": "extension"})
         client = app.test_client()
         client.get("/")
         with client.session_transaction() as session:

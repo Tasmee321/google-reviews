@@ -1,0 +1,18 @@
+{
+  "mode": "poster",
+  "port": 5000,
+  "browser_channel": "chrome",
+  "locale": "en-GB",
+  "device": null,
+  "proxies": [],
+  "delay_range": [0, 0],
+  "target": {
+    "lat": null,
+    "lng": null,
+    "timezone": "Europe/London"
+  },
+  "timeouts": {
+    "navigation_ms": 45000,
+    "element_ms": 15000
+  }
+}

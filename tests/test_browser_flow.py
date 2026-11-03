@@ -117,6 +117,22 @@ class BrowserFlowTests(unittest.TestCase):
             self.publish(review)
         self.assertEqual(page.evaluate("window.posts"), 0)
 
+    def test_text_changed_during_configured_pacing_never_posts(self):
+        review = self.prepare()
+        page = self.worker._prepared[review["id"]][1]
+        with patch.object(self.worker, "_random_delay", side_effect=lambda: page.locator("textarea").fill("Changed during delay")):
+            with self.assertRaisesRegex(ReviewError, "text differs"):
+                self.publish(review)
+        self.assertEqual(page.evaluate("window.posts"), 0)
+
+    def test_two_selected_overall_ratings_never_post(self):
+        review = self.prepare()
+        page = self.worker._prepared[review["id"]][1]
+        page.get_by_role("radio", name="1 star", exact=True).evaluate("node=>node.setAttribute('aria-checked','true')")
+        with self.assertRaisesRegex(ReviewError, "More than one overall rating"):
+            self.publish(review)
+        self.assertEqual(page.evaluate("window.posts"), 0)
+
     def test_rating_changed_after_preview_never_posts(self):
         review = self.prepare()
         page = self.worker._prepared[review["id"]][1]

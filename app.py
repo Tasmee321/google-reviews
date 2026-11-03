@@ -6,6 +6,9 @@ import os
 import secrets
 import io
 import zipfile
+import inspect
+import logging
+import webbrowser
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -19,22 +22,10 @@ from browser_bridge import BrowserBridge, open_normal_chrome
 from personal_browser import browser_kind, open_firefox_dashboard
 from build_firefox_extension import firefox_archive
 from review_policy import review_warnings, POLICY_URL, QUALITY_URL, APPEAL_URL
+from app_config import ConfigError, load_config, validate_config
+from poster import ReviewWorker
 
 ROOT = Path(__file__).resolve().parent
-
-
-def load_config():
-    """Load config.json from the project root. Returns an empty dict if absent."""
-    config_path = ROOT / "config.json"
-    if config_path.is_file():
-        try:
-            with config_path.open(encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
 
 
 def acquire_runtime_lock(directory):
@@ -58,24 +49,28 @@ def acquire_runtime_lock(directory):
     return handle
 
 
-def create_app(data_dir=None, worker_factory=None):
+def create_app(data_dir=None, worker_factory=None, config=None):
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY=secrets.token_hex(32), MAX_CONTENT_LENGTH=24000,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
         TRUSTED_HOSTS=["localhost", "127.0.0.1"],
     )
-    cfg = load_config()
+    cfg = load_config() if config is None else validate_config(config)
     store = ReviewStore(Path(data_dir) if data_dir else ROOT / "personal_data")
     store.recover()
 
     if worker_factory is None:
-        # Default: use BrowserBridge (extension mode). To use the Playwright-based
-        # ReviewWorker from poster.py instead, pass:
-        #   worker_factory=lambda s: ReviewWorker(s, cfg)
-        worker = BrowserBridge(store)
+        worker = ReviewWorker(store, cfg) if cfg["mode"] == "poster" else BrowserBridge(store, cfg)
     else:
-        worker = worker_factory(store, cfg)
+        # Preserve older one-argument test/extension factories without swallowing
+        # a TypeError raised inside a factory itself.
+        try:
+            inspect.signature(worker_factory).bind(store, cfg)
+        except TypeError:
+            worker = worker_factory(store)
+        else:
+            worker = worker_factory(store, cfg)
 
     app.extensions.update(review_store=store, review_worker=worker)
     atexit.register(worker.close)
@@ -126,6 +121,9 @@ def create_app(data_dir=None, worker_factory=None):
         session.setdefault("csrf", secrets.token_urlsafe(32))
         kind = getattr(worker, "browser_kind", "chrome")
         return render_template("index.html", csrf=session["csrf"], browser_kind=kind,
+                               browser_label=getattr(worker, "browser_label", kind.title()),
+                               poster_mode=getattr(worker, "transport", "") == "poster",
+                               uk_cities=json.loads((ROOT / "uk_cities.json").read_text(encoding="utf-8")),
                                policy_url=POLICY_URL, quality_url=QUALITY_URL, appeal_url=APPEAL_URL,
                                extension_path=str(ROOT / ("firefox_extension" if kind == "firefox" else "chrome_extension")))
 
@@ -269,11 +267,14 @@ def create_app(data_dir=None, worker_factory=None):
         if store.active() or browser["busy"] or browser["status"] != "connected":
             raise ReviewError("Connect Google and finish the current review first.", 409)
         if not getattr(worker, "extension_mode", False):
-            raise ReviewError("Auto-fetch needs the Tasmee browser extension.", 409)
+            if not hasattr(worker, "resolve_business"):
+                raise ReviewError("This browser does not support business resolution.", 409)
         try:
             url = maps_url(target.strip())
         except (ValueError, ReviewError) as error:
             raise ReviewError("Check the business link.", fields={"target": str(error)}) from error
+        if not getattr(worker, "extension_mode", False):
+            return jsonify(ok=True, assertion=worker.resolve_business(url, browser["email"]))
         return jsonify(ok=True, navigation_url=url, account_email=browser["email"])
 
     @app.post("/api/reviews/<review_id>/publish")
@@ -295,6 +296,9 @@ def create_app(data_dir=None, worker_factory=None):
     def extension_review(review_id):
         if not getattr(worker, "extension_mode", False):
             raise ReviewError("Extension transport is unavailable.", 409)
+        return confirmed_review(review_id)
+
+    def confirmed_review(review_id):
         data = body()
         review = store.get(review_id)
         token = data.get("confirmation_token", "")
@@ -377,13 +381,16 @@ def create_app(data_dir=None, worker_factory=None):
 
     @app.post("/api/reviews/<review_id>/check-start")
     def start_saved_check(review_id):
-        data, review = extension_review(review_id)
+        data, review = confirmed_review(review_id)
         if review["status"] not in {"posted", "unconfirmed"} or not review["business_url"]:
             raise ReviewError("Only saved or uncertain submissions can be checked.", 409)
         if review["checked_at"]:
             elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(review["checked_at"])).total_seconds()
             if elapsed < 60:
                 raise ReviewError("Wait a minute before checking this review again.", 429)
+        if hasattr(worker, "inspect_saved"):
+            checked = worker.inspect_saved(review_id, data.get("automatic") is True)
+            return jsonify(ok=True, completed=True, review=checked)
         if not hasattr(worker, "reserve_check"):
             raise ReviewError("This browser does not support background saved-review checks.", 409)
         token = worker.reserve_check(review_id)
@@ -435,17 +442,23 @@ def create_app(data_dir=None, worker_factory=None):
 
 if __name__ == "__main__":
     load_dotenv(ROOT / ".env")
-    port = int(os.getenv("PORT", "5000"))
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        config = load_config()
+    except ConfigError as error:
+        raise SystemExit(str(error))
+    port = config["port"]
     try:
         runtime_lock = acquire_runtime_lock(ROOT / "personal_data")
     except RuntimeError as error:
         raise SystemExit(str(error))
-    dashboard = create_app()
+    dashboard = create_app(config=config)
     print(f"Personal review dashboard: http://127.0.0.1:{port}", flush=True)
     import threading
     def open_dashboard():
         try:
-            opener = open_firefox_dashboard if browser_kind() == "firefox" else open_normal_chrome
+            opener = webbrowser.open if config["mode"] == "poster" else (
+                open_firefox_dashboard if browser_kind() == "firefox" else open_normal_chrome)
             opener(f"http://127.0.0.1:{port}/")
         except ReviewError as error:
             print(str(error), flush=True)
@@ -453,4 +466,8 @@ if __name__ == "__main__":
         opening = threading.Timer(1, open_dashboard)
         opening.daemon = True
         opening.start()
-    dashboard.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
+    try:
+        dashboard.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
+    finally:
+        dashboard.extensions["review_worker"].close()
+        runtime_lock.close()

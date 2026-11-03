@@ -1,72 +1,60 @@
-# Tasmee Personal Reviews
+# Tasmee Personal Reviews — UK poster setup
 
-Local Flask dashboard for preparing and explicitly submitting your own Google
-Maps reviews through an ordinary, persistent Firefox profile and a signed
-browser extension. No cloud deployment, bulk posting, IP rotation or spoofing.
+Local Flask dashboard backed by `poster.py` / Playwright by default. One
+verified Google account and one review at a time; posting needs an explicit
+**Post this review** click. No browser extension is needed in poster mode.
 
 ## Windows quick start
 
-1. Install Python 3.11+ and ordinary Mozilla Firefox 142+.
-2. Run `install.bat` to install Python dependencies.
-3. Run `start_localhost.bat`, or `run.bat` (dedicated Firefox).
-4. Install the Mozilla-signed extension into that Firefox profile through
-   `about:addons` → Install Add-on From File.
-5. Sign in directly with Google and click Check connection in the dashboard.
-6. Enter your genuine review and business link, click Start, then explicitly Post.
+1. Install Python 3.11+ with **Add Python to PATH**, and Google Chrome.
+2. Connect your existing Avast SecureLine VPN to an available **United Kingdom**
+   server. Enable its kill switch and keep the selected browser out of split-tunnel exclusions.
+3. Run `install.bat` once. It installs dependencies in this project's `.venv`.
+4. Run `run.bat` or `start_localhost.bat`. Keep the terminal open.
+5. In the dashboard, open Google sign-in and finish it in the dedicated poster
+   browser. Then click **Check connection**.
+6. Choose a UK city for a business-name search, or paste a specific Google Maps
+   link. Enter your review/rating, click **Start**, then explicitly **Post**.
 
-Dashboard: http://127.0.0.1:5000/ . Keep the server terminal open.
+The default address is http://127.0.0.1:5000/ . `check_setup.bat` diagnoses
+configuration, dependencies and browser installation without signing in or posting.
 
-## Features
+## Configured defaults
 
-- Verified account, business, exact text and star rating before submission.
-- Success-only composer reset; uncertainty is not silently marked successful.
-- History details, local deletion, filters, pagination and business/address counts.
-- Verified account shortcuts with one active account at a time.
-- Conservative read-only saved-review monitoring while the dashboard is open.
-- Local-only API, origin/CSRF protection and duplicate/retry safeguards.
-- Expiring browser operations, conservative interrupted-submission recovery,
-  and stale-callback isolation so a lost dashboard response does not lock every new action.
-- Local-only review reminders for links/contact details and repeated wording;
-  official Google quality, moderation-delay and appeal guidance. No automatic rewriting or approval score.
+- Main engine: `poster.py`; Chrome with a persistent local profile.
+- UK language/time: `en-GB` and `Europe/London` (GMT/BST).
+- All **76 UK cities** from the GOV.UK city list, grouped by nation.
+- No application proxy: `proxies` must remain `[]`. Windows/Avast controls routing.
+- No device emulation or coordinate override by default; no random user-agent changes.
+- History, account shortcuts, duplicate protection and read-only saved-review checks.
 
-Saved/submitted status does **not** prove public visibility. Google moderates
-reviews independently. VPN protection is neither controlled nor verified by
-this app, and cannot guarantee that a review stays published.
+City selection narrows **business search**, not the VPN exit location. The app
+neither switches Avast servers nor verifies its IP/DNS/IPv6 protection. A saved
+review confirms saved status only; public visibility remains unknown.
 
-See [GOOGLE_REVIEW_GUIDE.md](GOOGLE_REVIEW_GUIDE.md) for policy-based writing
-guidance and safe update/restart steps. These backend/dashboard changes preserve
-the existing Firefox profile and signed extension; no extension replacement is needed.
+`config.json` is ready to use. `config.example.json` is the reset/reference copy.
+No Google Maps API key, proxy subscription or Google password in a config file is required.
 
-## Build Firefox extension
+## Optional extension modes
 
-```powershell
-python build_firefox_extension.py
-```
+`run_chrome.bat` explicitly selects the existing Chrome extension workflow.
+`run_firefox.bat` explicitly selects the existing dedicated Firefox workflow;
+normal Firefox still needs a Mozilla-signed add-on. Existing profiles and signed
+add-ons are preserved. To build extension sources: `python build_firefox_extension.py`.
 
-Outputs include unpacked sources, a versioned **unsigned** XPI and a clean source
-ZIP for Mozilla signing. Normal Firefox requires the resulting signed XPI for
-permanent installation. Signing protection must not be disabled. Generated
-artifacts and browser profiles are intentionally excluded from Git.
-
-## Tests
+## Verification
 
 ```powershell
-python -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe check_setup.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe build_firefox_extension.py
 node tests/test_extension_transport.js
 ```
 
-Browser tests use intercepted Google fixtures, not real accounts or reviews.
-They require the configured Chrome/test Chromium runtime. Unit/API tests can
-run without controlling a live browser.
+Browser tests use temporary profiles and intercepted Google fixtures, not live
+accounts or reviews. They require Chrome and Playwright test Chromium; install
+the latter with `.\.venv\Scripts\python.exe -m playwright install chromium`.
 
-## Local data
-
-Passwords, account lists, environment files, browser sessions, review databases,
-backups and test outputs must not be committed. Local history deletion leaves
-minimal business/count and keyed account-hash receipts for duplicate protection;
-it does not delete Google reviews or existing backups. The database is not
-encrypted. Legacy account credentials are not used by the current workflow.
-
-See [SETUP_GUIDE.md](SETUP_GUIDE.md), [EXTENSION_PRIVACY.md](EXTENSION_PRIVACY.md)
-and [FIREFOX_SOURCE_BUILD.md](FIREFOX_SOURCE_BUILD.md) for detailed setup,
-limitations, data handling and reproducible extension builds.
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for configuration, Avast setup and troubleshooting.
+Session data lives under `personal_data/`; do not commit it, `.env`, backups,
+account lists or private keys. Local history deletion does not remove Google reviews.

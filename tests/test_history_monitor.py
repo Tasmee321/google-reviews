@@ -101,7 +101,7 @@ class HistoryApiTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         with patch.dict('os.environ', {'REVIEW_BROWSER':'chrome'}):
-            self.app = create_app(self.temp.name)
+            self.app = create_app(self.temp.name, config={"mode": "extension"})
         self.client = self.app.test_client()
         self.client.get('/')
         with self.client.session_transaction() as session:

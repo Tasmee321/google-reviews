@@ -24,8 +24,8 @@ aur [high-quality review tips](https://support.google.com/maps/answer/10357321?h
 
 ## App mein istemal
 
-1. Existing dedicated Firefox mein dashboard kholein aur account verify karein.
-2. Business link, apni rating aur apna text enter karein.
+1. `run.bat` se dashboard kholein. Default poster browser mein Google account verify karein.
+2. UK city select karke business search, ya exact Maps link, apni rating aur apna text enter karein.
 3. Text field se bahar click karne par local reminders dikh sakte hain. Start
    par bhi ye check hota hai. Link/email, possible phone/long identifier aur
    local submitted/uncertain history mein repeated wording check hoti hai.
@@ -57,26 +57,28 @@ Sources: [missing/delayed reviews](https://support.google.com/business/answer/10
 
 ## Reliability aur permanent browser
 
-Same Firefox profile aur installed signed add-on preserve hote hain. Permanent
+Poster apna persistent Chrome profile use karta hai. Optional extension mode ka
+Firefox profile aur installed signed add-on bhi preserve hote hain. Permanent
 profile ka matlab Google review ka permanent publication nahi. VPN/public IP
 aur device location alag cheezein hain; inhein change karna publication ka proof nahi.
 
-Browser preparation/verification/submission-response phase ka local deadline
+Optional extension mode mein browser preparation/verification/submission-response phase ka local deadline
 180 seconds hai; yeh app reliability limit hai, Google posting cadence nahi.
 Timeout aglay status/API check par recover hota hai. Submission authorize ho
 chuki ho to status Unconfirmed rehta hai aur duplicate protection preserve hoti
 hai. Submission se pehle timeout Interrupted hota hai. Old Maps tab close karke
-status check karein; app automatically submit/retry nahi karta. Ready preview
+status check karein; app automatically submit/retry nahi karta. Poster mode mein
+navigation aur element timeouts `config.json` mein set hain. Ready preview
 sirf waqt guzarne se expire nahi hota.
 
 Update apply karne ke liye active action complete/cancel karein, server terminal
-mein Ctrl+C karein, launcher dobara run karein aur existing Firefox dashboard
+mein Ctrl+C karein, launcher dobara run karein aur existing dashboard
 refresh karein. Sirf server start karna ho to:
 
 ```powershell
-$env:REVIEW_BROWSER = 'firefox'
+$env:REVIEW_MODE = 'poster'
 $env:REVIEW_OPEN_BROWSER = '0'
-python app.py
+.\.venv\Scripts\python.exe app.py
 ```
 
 Yeh commands project directory mein chalayein. Is dashboard/backend update ke

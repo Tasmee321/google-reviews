@@ -18,7 +18,7 @@ class BridgeRecoveryTests(unittest.TestCase):
         clock.start()
         self.addCleanup(clock.stop)
         with patch.dict('os.environ', {'REVIEW_BROWSER': 'firefox'}):
-            self.app = create_app(self.directory.name)
+            self.app = create_app(self.directory.name, config={"mode": "extension"})
         self.client = self.app.test_client()
         self.client.get('/')
         with self.client.session_transaction() as session:

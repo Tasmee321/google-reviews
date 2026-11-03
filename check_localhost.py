@@ -1,12 +1,12 @@
 """Read-only startup check. Never launches a browser or changes review state."""
 import json
-import os
 import socket
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, build_opener
 
 from dotenv import load_dotenv
+from app_config import ConfigError, load_config
 
 ROOT = Path(__file__).resolve().parent
 
@@ -24,7 +24,7 @@ def check_dashboard(port):
             print(f"Another service is using {url}; nothing new was started.")
             return 2
         print(f"Tasmee dashboard already running: {url}")
-        print("Use the dashboard tab in your existing dedicated Firefox window.")
+        print("Use the existing dashboard tab. Restart the server to apply configuration changes.")
         return 0
     except HTTPError as error:
         error.close()
@@ -45,11 +45,9 @@ def check_dashboard(port):
 def main():
     load_dotenv(ROOT / ".env")
     try:
-        port = int(os.getenv("PORT", "5000"))
-        if not 1 <= port <= 65535:
-            raise ValueError
-    except ValueError:
-        print("PORT must be an integer between 1 and 65535. Check your .env.")
+        port = load_config()["port"]
+    except ConfigError as error:
+        print(str(error))
         return 2
     return check_dashboard(port)
 

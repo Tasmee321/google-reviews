@@ -1,46 +1,19 @@
-# poster.py
-# ----------------------------------------------------------------------
-#  Google‑Maps review automation – with location spoofing, IP‑proxying
-#  and device‑fingerprinting.
-#
-#  The file is a drop‑in replacement for the original poster.py.
-#  It expects a `config.json` file in the same directory with the
-#  following structure:
-#
-#  {
-#      "api_key": "YOUR_GOOGLE_MAPS_API_KEY",
-#      "target": {
-#          "name": "My Business",
-#          "lat": 31.5204,
-#          "lng": 74.3587,
-#          "timezone": "Asia/Karachi"
-#      },
-#      "proxies": [
-#          "http://proxy1.example.com:3128",
-#          "http://proxy2.example.com:3128"
-#      ],
-#      "delay_range": [2.0, 6.0]
-#  }
-#
-#  The code below automatically picks a random proxy, random user‑agent,
-#  emulates a Pixel‑5 device, forces the browser to report the target
-#  latitude/longitude, and inserts small random delays so Google treats
-#  each request as coming from a real human.
-# ----------------------------------------------------------------------
-
-
-import os
+"""Single-account Playwright review worker. Browser calls stay on one worker thread."""
 import queue
 import re
 import threading
 import time
-import json
 import random
-import requests
+import logging
+from concurrent.futures import Future, TimeoutError as FutureTimeout
 
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from review_store import MAP_HOSTS, ReviewError, business_location, normalize_name
+from app_config import validate_config
+from browser_options import launch_options
+
+LOGGER = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
@@ -62,18 +35,26 @@ def business_key(url, name):
 # Main worker – handles a single browser session
 # ----------------------------------------------------------------------
 class ReviewWorker:
-    def __init__(self, store, cfg):
+    extension_mode = False
+    transport = "poster"
+    capabilities = ["saved_checks", "account_selection", "business_resolution"]
+
+    def __init__(self, store, cfg=None):
         """
         :param store:   ReviewStore instance
         :param cfg:     configuration dictionary from config.json
         """
         self.store = store
-        self.cfg = cfg
+        self.cfg = validate_config(cfg or {})
+        self.browser_kind = self.cfg["browser_channel"]
+        self.browser_label = {"chrome": "Chrome", "msedge": "Edge", "chromium": "Chromium"}[self.browser_kind]
 
         self._lock = threading.Lock()
         self._state = {"status": "disconnected", "email": "", "busy": False,
+                       "transport": "poster", "browser_kind": self.browser_kind,
+                       "capabilities": list(self.capabilities),
                        "message": "Connect your Google account to get started."}
-        self._queue = queue.Queue()
+        self._queue = queue.Queue(maxsize=1)
         self._thread = None
         self._stop = threading.Event()
         self._cancel = set()
@@ -81,6 +62,7 @@ class ReviewWorker:
         self._context = None
         self._prepared = {}
         self._expected_email = ""
+        self._account_indexes = {}
 
     # ------------------------------------------------------------------
     # State helpers
@@ -96,8 +78,13 @@ class ReviewWorker:
     # ------------------------------------------------------------------
     # Public API – queue a command
     # ------------------------------------------------------------------
-    def command(self, action, value=None):
+    def command(self, action, value=None, wait=False):
+        if action not in {"login", "check", "select", "prepare", "publish", "discard", "resolve", "saved_check"}:
+            raise ReviewError("Unsupported browser action.")
+        future = Future() if wait else None
         with self._lock:
+            if self._stop.is_set():
+                raise ReviewError("The browser worker has stopped. Restart the app.", 409)
             if self._state["busy"]:
                 raise ReviewError("The browser is busy. Wait for the current action.", 409)
             self._state["busy"] = True
@@ -105,7 +92,12 @@ class ReviewWorker:
                 self._thread = threading.Thread(target=self._run, name="personal-review-browser",
                                                 daemon=True)
                 self._thread.start()
-        self._queue.put((action, value))
+            self._queue.put_nowait((action, value, future))
+        if future is not None:
+            try:
+                return future.result(timeout=180)
+            except FutureTimeout as error:
+                raise ReviewError("Browser action is still running. Wait for it to finish before retrying.", 504) from error
 
     def cancel(self, review_id):
         with self._lock:
@@ -114,26 +106,33 @@ class ReviewWorker:
     def close(self):
         self._stop.set()
         if self._thread:
-            self._queue.put(("close", None))
-            self._thread.join(timeout=2)
+            try:
+                self._queue.put_nowait(("close", None, None))
+            except queue.Full:
+                pass
+            self._thread.join(timeout=180)
 
     # ------------------------------------------------------------------
     # Main worker loop
     # ------------------------------------------------------------------
     def _run(self):
         try:
-            while not self._stop.is_set():
-                action, value = self._queue.get()
-                if action == "close":
+            while True:
+                action, value, future = self._queue.get()
+                if action == "close" or self._stop.is_set():
+                    if future is not None:
+                        future.set_exception(ReviewError("The browser worker stopped.", 409))
                     break
+                result = None
+                failure = None
                 try:
-                    getattr(self, "_" + action)(value)
+                    result = getattr(self, "_" + action)(value)
                 except Exception as error:
                     if isinstance(error, ReviewError):
                         message = str(error)
                     elif action in {"login", "check"}:
                         message = ("Google connection could not be checked. "
-                                   "Open Google sign‑in, complete it in the browser, then check again.")
+                                   "Open Google sign-in, complete it in the browser, then check again.")
                     else:
                         message = ("Browser action failed. Check the browser window and prepare again.")
                     if action in {"prepare", "publish"}:
@@ -145,10 +144,18 @@ class ReviewWorker:
                                        "Check your contributions before posting again.")
                         self.store.update(value, status=status, message=message)
                         self._prepared.pop(value, None)
-                    else:
+                    elif action not in {"resolve", "saved_check"}:
                         self._state_update(status="error", message=message)
+                    failure = error if isinstance(error, ReviewError) else ReviewError(message, 502)
+                    if not isinstance(error, ReviewError):
+                        LOGGER.error("Browser action %s failed (%s).", action, type(error).__name__)
                 finally:
                     self._state_update(busy=False)
+                if future is not None:
+                    if failure:
+                        future.set_exception(failure)
+                    else:
+                        future.set_result(result)
         finally:
             if self._context:
                 try:
@@ -159,95 +166,32 @@ class ReviewWorker:
                 self._playwright.stop()
 
     # ------------------------------------------------------------------
-    # Browser helper – ensures a Playwright context with proxy & spoofing
+    # Browser helper – persistent profile using the Windows network connection
     # ------------------------------------------------------------------
     def _ensure_browser(self):
-        # Re‑use existing context if still alive
         if self._context:
             try:
                 self._context.cookies()
                 return
             except Exception:
+                try:
+                    self._context.close()
+                except Exception:
+                    pass
                 self._context = None
                 self._prepared.clear()
-
-        # Start Playwright if needed
         if self._playwright is None:
             from playwright.sync_api import sync_playwright
             self._playwright = sync_playwright().start()
-
-        channel = os.getenv("BROWSER_CHANNEL", "chrome")
-        if channel not in {"chrome", "msedge", "chromium"}:
-            raise ReviewError("BROWSER_CHANNEL must be chrome, msedge or chromium.")
-
-        # ------------------------------------------------------------------
-        # Pick a random proxy from the config
-        # ------------------------------------------------------------------
-        proxy_url = random.choice(self.cfg.get("proxies", []))
-        proxy = {"server": proxy_url} if proxy_url else None
-
-        # ------------------------------------------------------------------
-        # Pick a random User‑Agent
-        # ------------------------------------------------------------------
-        ua = random.choice([
-            # Realistic UA strings – extend as desired
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 "
-            "Mobile/15E148 Safari/604.1",
-            "Mozilla/5.0 (Linux; Android 12; Pixel 5 Build/QP1A.190711.020; wv) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.65 "
-            "Mobile Safari/537.36"
-        ])
-
-        # ------------------------------------------------------------------
-        # Device emulation – Pixel 5
-        # ------------------------------------------------------------------
-        from playwright.sync_api import devices
-        device = devices["Pixel 5"]
-
+        options = launch_options(self.cfg, self._playwright.devices)
         try:
             self._context = self._playwright.chromium.launch_persistent_context(
-                str(self.store.directory / "browser"),
-                channel=channel,
-                headless=False,
-                locale="en-US",
-                viewport={"width": 1280, "height": 900},
-                proxy=proxy,
-                user_agent=ua,
-                **device
-            )
-            self._context.set_default_timeout(10000)
-
-            # ------------------------------------------------------------------
-            # Force the browser to report the target geolocation
-            # ------------------------------------------------------------------
-            target = self.cfg.get("target", {})
-            if target.get("lat") and target.get("lng"):
-                self._context.set_geolocation({
-                    "latitude": target["lat"],
-                    "longitude": target["lng"]
-                })
-                self._context.set_permissions(["geolocation"])
-
-            # ------------------------------------------------------------------
-            # Optional sanity check – does the proxy IP report the expected country?
-            # ------------------------------------------------------------------
-            try:
-                r = requests.get("https://ipinfo.io/json", timeout=5)
-                ip_info = r.json()
-                # Example: check that the country is Pakistan or India
-                if ip_info.get("country") not in {"PK", "IN"}:
-                    print(f"⚠️ Proxy IP {ip_info['ip']} reports country {ip_info.get('country')}")
-            except Exception:
-                pass
-
+                str(self.store.directory / "browser"), **options)
+            self._context.set_default_timeout(self.cfg["timeouts"]["element_ms"])
         except Exception as error:
             raise ReviewError(
-                "Cannot open the browser. Install Chrome, or set BROWSER_CHANNEL=msedge. "
-                "Close other copies of this tool."
-            ) from error
+                "Cannot open the configured browser. Run check_setup.bat, close another "
+                "copy using this profile, and check browser_channel in config.json.") from error
 
     # ------------------------------------------------------------------
     # Open a new page inside the context
@@ -297,7 +241,7 @@ class ReviewWorker:
     @staticmethod
     def _check_google_page(page):
         parsed = urlsplit(page.url)
-        if parsed.hostname not in MAP_HOSTS or not parsed.path.startswith("/maps"):
+        if parsed.scheme != "https" or parsed.hostname not in MAP_HOSTS or not parsed.path.startswith("/maps"):
             raise ReviewError(
                 "The link did not open a Google Maps business. Check the target or "
                 "sign in first."
@@ -340,11 +284,11 @@ class ReviewWorker:
                     }
                 ),
                 wait_until="domcontentloaded",
-                timeout=45000,
+                timeout=self.cfg["timeouts"]["navigation_ms"],
             )
         except BrowserTimeout as error:
             raise ReviewError(
-                "Google sign‑in took too long to load. Check the browser window and your "
+                "Google sign-in took too long to load. Check the browser window and your "
                 "internet connection."
             ) from error
         page.bring_to_front()
@@ -362,9 +306,12 @@ class ReviewWorker:
         from playwright.sync_api import TimeoutError as BrowserTimeout
         page = self._new_page()
         try:
-            page.goto("https://www.google.com/maps?hl=en",
+            query = {"hl": "en", "gl": "gb"}
+            if self._expected_email:
+                query["authuser"] = self._expected_email
+            page.goto("https://www.google.com/maps?" + urlencode(query),
                       wait_until="domcontentloaded",
-                      timeout=45000)
+                      timeout=self.cfg["timeouts"]["navigation_ms"])
             self._consent(page)
             try:
                 page.locator(
@@ -374,8 +321,8 @@ class ReviewWorker:
                 )
             except BrowserTimeout as error:
                 raise ReviewError(
-                    "Google sign‑in was not detected. Enter your email and click Open "
-                    "Google sign‑in, finish password/2FA in Google's window, then "
+                    "Google sign-in was not detected. Enter your email and click Open "
+                    "Google sign-in, finish password/2FA in Google's window, then "
                     "Check connection."
                 ) from error
             email = self._account(page)
@@ -384,6 +331,10 @@ class ReviewWorker:
                     "The browser is signed into a different account. Switch accounts "
                     "in Google Maps."
                 )
+            index = parse_qs(urlsplit(page.url).query).get("authuser", [""])[0]
+            if index.isdecimal():
+                self._account_indexes[email] = index
+            self.store.remember_account(email)
             self._state_update(
                 status="connected",
                 email=email,
@@ -395,6 +346,76 @@ class ReviewWorker:
             ) from error
         finally:
             page.close()
+
+    def _select(self, email):
+        self._expected_email = email
+        self._check(None)
+
+    def _account_url(self, url, email):
+        parsed = urlsplit(url)
+        if parsed.hostname in {"maps.app.goo.gl", "goo.gl"}:
+            return url
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        if email in self._account_indexes:
+            query["authuser"] = [self._account_indexes[email]]
+        elif self._expected_email == email:
+            query["authuser"] = [email]
+        query["hl"], query["gl"] = ["en"], ["gb"]
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query, doseq=True), ""))
+
+    def _navigate_business(self, page, url, email):
+        page.goto(self._account_url(url, email), wait_until="domcontentloaded",
+                  timeout=self.cfg["timeouts"]["navigation_ms"])
+        if urlsplit(url).hostname in {"maps.app.goo.gl", "goo.gl"}:
+            self._check_google_page(page)
+            destination = self._account_url(page.url, email)
+            if destination != page.url:
+                page.goto(destination, wait_until="domcontentloaded",
+                          timeout=self.cfg["timeouts"]["navigation_ms"])
+
+    def resolve_business(self, url, email):
+        return self.command("resolve", (url, email), wait=True)
+
+    def _resolve(self, request):
+        from poster_pages import business_details
+        url, email = request
+        page = self._new_page()
+        try:
+            self._navigate_business(page, url, email)
+            self._consent(page)
+            self._check_google_page(page)
+            return business_details(page, email, self.cfg["timeouts"]["element_ms"])
+        finally:
+            page.close()
+
+    def inspect_saved(self, review_id, automatic=False):
+        return self.command("saved_check", (review_id, automatic), wait=True)
+
+    def _saved_check(self, request):
+        from poster_pages import saved_review
+        review_id, automatic = request
+        review = self.store.get(review_id)
+        state = self.snapshot()
+        if self.store.active() or state["status"] != "connected" or state["email"] != review["account_email"]:
+            raise ReviewError("Saved checks need this review's connected account and no active review.", 409)
+        if automatic:
+            self.store.claim_auto_check(review_id)
+        page = None
+        try:
+            page = self._new_page()
+            self._navigate_business(page, review["business_url"], review["account_email"])
+            self._consent(page)
+            proof = saved_review(page, review, self.cfg["timeouts"]["element_ms"])
+            self.store.record_saved_check(review_id, True,
+                "Saved review verified against account, business, exact text and rating. Public visibility remains unknown.", proof)
+        except Exception:
+            self.store.record_saved_check(review_id, False,
+                "Saved review could not be verified. This does not prove deletion; nothing was reposted.")
+            raise
+        finally:
+            if page is not None:
+                page.close()
+        return self.store.get(review_id)
 
     # ------------------------------------------------------------------
     # Helper – cancel a review if requested
@@ -427,46 +448,19 @@ class ReviewWorker:
         )
         review = self.store.get(review_id)
         page = self._new_page()
-        page.goto(
-            review["navigation_url"],
-            wait_until="domcontentloaded",
-            timeout=45000,
-        )
+        self._navigate_business(page, review["navigation_url"], review["account_email"])
         self._consent(page)
-        self._random_delay()  # human‑like pause after consent
-        page.get_by_role("heading", level=1).first.wait_for(
-            state="visible", timeout=20000
-        )
-        self._check_google_page(page)
-        name = self._one_visible(page.get_by_role("heading", level=1)).inner_text().strip()
+        self._random_delay()
+        from poster_pages import business_details
+        info = business_details(page, review["account_email"], self.cfg["timeouts"]["element_ms"])
+        name, email, address = info["name"], info["email"], info["address"]
         if normalize_name(name) != normalize_name(review["expected_name"]):
             raise ReviewError(
-                f"Business mismatch: Google opened '{name}'. Enter its exact business name and prepare again."
-            )
-        email = self._account(page)
-        if email != review["account_email"]:
-            self._state_update(status="error", email="", message="Google account changed. Check connection again.")
-            raise ReviewError(
-                "Google is signed into a different account. Nothing was posted."
-            )
+                f"Business mismatch: Google opened '{name}'. Enter its exact business name and prepare again.")
         key = business_key(page.url, name)
         if self.store.duplicate(review_id, key, email):
             raise ReviewError(
-                "A posted or unconfirmed review already exists for this account and business. Check Google Maps first."
-            )
-        addresses = page.locator('[data-item-id="address"]')
-        visible_addresses = [addresses.nth(i) for i in range(addresses.count())
-                             if addresses.nth(i).is_visible()]
-        address = ""
-        if len(visible_addresses) == 1:
-            address = visible_addresses[0].evaluate(
-                """node => {
-                    const label = node.getAttribute('aria-label') || '';
-                    return /^Address:\\s*/i.test(label)
-                        ? label.replace(/^Address:\\s*/i, '').trim()
-                        : (node.querySelector('.Io6YTe')?.textContent.trim() || '');
-                }"""
-            )
+                "A posted or unconfirmed review already exists for this account and business. Check Google Maps first.")
         self.store.update(
             review_id,
             business_name=name,
@@ -482,6 +476,8 @@ class ReviewWorker:
             page.get_by_role("button", name=re.compile(r"^(Write a review|Rate and review)$", re.I))
         ).click()
         form_page, form = self._find_form(page, existing_pages)
+        from poster_pages import validate_widget
+        validate_widget(form, page, review)
         self._fill_form(form_page, form, review)
         if not self._checkpoint(review_id):
             return
@@ -519,6 +515,14 @@ class ReviewWorker:
                         matches.append((page, dialog))
                 if page != original and not dialogs.count() and page.locator("textarea").count() == 1:
                     matches.append((page, page.locator("body")))
+                for frame in page.frames:
+                    if frame == page.main_frame:
+                        continue
+                    parsed_frame = urlsplit(frame.url)
+                    if (parsed_frame.path == "/maps/api/js/ReviewsService.LoadWriteWidget"
+                            and frame.locator("textarea").count() == 1
+                            and frame.locator("textarea").is_visible()):
+                        matches.append((page, frame.locator("body")))
             if len(matches) == 1:
                 return matches[0]
             if len(matches) > 1:
@@ -534,9 +538,13 @@ class ReviewWorker:
     # Helper – click a specific rating
     # ------------------------------------------------------------------
     def _rating(self, form, stars):
+        overall = form.get_by_role("radiogroup", name="Rating stars", exact=True)
+        if overall.count():
+            form = self._one_visible(overall)
         candidates = form.locator('[role="radio"], [data-rating], [aria-label*="star"], [aria-label*="Star"]')
         matches = []
-        pattern = re.compile(rf"^(?:Rate\s+)?{stars}\s+stars?$", re.I)
+        words = ("", "One", "Two", "Three", "Four", "Five")
+        pattern = re.compile(rf"^(?:Rate\s+)?(?:{stars}|{words[stars]})\s+stars?$", re.I)
         for i in range(candidates.count()):
             item = candidates.nth(i)
             label = (item.get_attribute("aria-label") or "").strip()
@@ -566,6 +574,8 @@ class ReviewWorker:
             raise ReviewError(
                 "Google's selected rating could not be verified. Nothing was posted; finish manually in Google Maps."
             )
+        if any(self._selected(self._rating(form, stars)) for stars in range(1, 6) if stars != review["stars"]):
+            raise ReviewError("More than one overall rating is selected. Nothing was posted.")
 
     # ------------------------------------------------------------------
     # Fill the form with rating and text
@@ -591,6 +601,7 @@ class ReviewWorker:
         original, page, form = self._prepared[review_id]
         if page.is_closed() or original.is_closed():
             raise ReviewError("The Google Maps window was closed. Nothing was posted.")
+        self._random_delay()
         self._check_google_page(original)
         name = self._one_visible(original.get_by_role("heading", level=1,
                                                     name=review["business_name"],
@@ -604,11 +615,12 @@ class ReviewWorker:
             raise ReviewError(
                 "The review window's Google account could not be verified. Nothing was posted."
             )
+        from poster_pages import validate_widget
+        validate_widget(form, original, review)
         self._verify_form(form, review)
         post = self._one_visible(form.get_by_role("button", name="Post", exact=True))
         if not post.is_enabled():
             raise ReviewError("Google's Post button is disabled. Nothing was posted.")
-        self._random_delay()  # human‑like pause before clicking
         if self._stop.is_set():
             raise ReviewError("The app stopped before submission. Nothing was posted.")
         self.store.transition(
@@ -619,6 +631,13 @@ class ReviewWorker:
         )
         post.click(timeout=10000)
         confirmed = self._confirmed(page)
+        if not confirmed:
+            try:
+                from poster_pages import saved_review
+                saved_review(original, review, timeout=1000)
+                confirmed = True
+            except Exception:
+                pass
         self.store.transition(
             review_id,
             "submitting",
@@ -658,11 +677,11 @@ class ReviewWorker:
                     tab.close()
 
     # ------------------------------------------------------------------
-    # Random delay helper (used to mimic human behaviour)
+    # Optional bounded pacing; default has no added delay
     # ------------------------------------------------------------------
     def _random_delay(self):
-        low, high = self.cfg.get("delay_range", (2.0, 6.0))
-        time.sleep(random.uniform(low, high))
+        low, high = self.cfg["delay_range"]
+        self._stop.wait(random.uniform(low, high))
 
 
 # ----------------------------------------------------------------------

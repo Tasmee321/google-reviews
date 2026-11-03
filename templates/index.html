@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf }}">
   <meta name="review-browser" content="{{ browser_kind }}">
+  <meta name="browser-label" content="{{ browser_label }}">
   <title>Tasmee · Personal reviews</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
@@ -25,6 +26,16 @@
       <form id="reviewForm" novalidate>
         <div id="formErrors" class="error-summary" role="alert" tabindex="-1" hidden></div>
         <fieldset id="draftFields">
+          <div class="field">
+            <label for="searchCity">UK city · business search</label>
+            <select id="searchCity" aria-describedby="cityHint">
+              <option value="">All United Kingdom</option>
+              {% for country, cities in uk_cities.items() %}
+              <optgroup label="{{ country }}">{% for city in cities %}<option value="{{ city }}, {{ country }}, United Kingdom">{{ city }}</option>{% endfor %}</optgroup>
+              {% endfor %}
+            </select>
+            <p id="cityHint" class="hint">City business-name search ke liye hai. Google Maps links unchanged rehte hain; yeh VPN ya device location nahi badalta.</p>
+          </div>
           <div class="field">
             <label for="target">Business link or search</label>
             <input id="target" name="target" type="text" maxlength="2048" placeholder="Paste a Google Maps link, or business name + city" required aria-describedby="targetHint targetError">
@@ -75,8 +86,8 @@
     </section>
     <aside class="side-column">
       <section class="account-panel" aria-labelledby="accountTitle">
-        <div class="section-heading"><h2 id="accountTitle">Google account</h2><span class="tiny-label">{{ 'DEDICATED FIREFOX' if browser_kind == 'firefox' else 'NORMAL CHROME' }}</span></div>
-        <p id="extensionState" class="hint">{{ 'Firefox extension setup' if browser_kind == 'firefox' else 'One-time Chrome setup' }}</p>
+        <div class="section-heading"><h2 id="accountTitle">Google account</h2><span class="tiny-label">{{ 'POSTER MODE' if poster_mode else 'DEDICATED FIREFOX' if browser_kind == 'firefox' else 'NORMAL CHROME' }}</span></div>
+        <p id="extensionState" class="hint">{{ 'Poster connected directly · no extension required' if poster_mode else 'Firefox extension setup' if browser_kind == 'firefox' else 'One-time Chrome setup' }}</p>
         <details id="extensionSetup" class="extension-setup" hidden open>
           <summary>{{ 'Connect your dedicated Firefox' if browser_kind == 'firefox' else 'Connect your normal Chrome' }}</summary>
           {% if browser_kind == 'firefox' %}
@@ -97,10 +108,13 @@
         {% if browser_kind == 'firefox' %}
         <p class="hint">VPN protection is not verified by this app. Google sign-in se pehle Avast VPN connected, Always on aur kill switch on rakhein. Firefox ko split-tunnel exclusions mein na rakhein. Har run par wahi Firefox profile use hoga; IP rotation nahi hoti.</p>
         {% endif %}
+        {% if poster_mode %}
+        <p class="hint">Google ka sign-in poster ki dedicated {{ browser_label }} window mein hoga. Avast SecureLine VPN mein UK server manually connect rakhein, kill switch on aur is browser ko split tunneling se exclude na karein. App proxy use nahi karta aur VPN connection verify nahi karta.</p>
+        {% endif %}
         <form id="accountForm" novalidate>
           <label for="accountSelect">Saved account shortcuts</label>
           <select id="accountSelect" aria-describedby="accountSelectHint"><option value="">Connect an account first</option></select>
-          <p id="accountSelectHint" class="hint">Ek waqt mein ek verified account. Yeh Google login nahi, local shortcut hai; password ya cookies app mein save nahi hote.</p>
+          <p id="accountSelectHint" class="hint">Ek waqt mein ek verified account. Shortcut mein password ya cookies nahi hote; Google session browser ke profile mein rehta hai.</p>
           <div class="account-actions"><button id="switchAccountButton" class="button secondary" type="button">Switch account</button><button id="forgetAccountButton" class="button quiet" type="button">Remove shortcut</button></div>
           <label for="email">Your Google email</label>
           <input id="email" type="email" autocomplete="email" placeholder="you@gmail.com" maxlength="254" required aria-describedby="emailHint emailError">
@@ -145,7 +159,7 @@
   <section class="history-section" aria-labelledby="monitorTitle">
     <div class="section-heading"><h2 id="monitorTitle">Saved-review monitoring</h2><span id="monitorStatus" class="badge">Setup required</span></div>
     <label class="check-label"><input id="autoCheck" type="checkbox" checked>Automatically check saved reviews while this dashboard is open</label>
-    <p id="monitorHint" class="hint">Extension 1.0.6 required. Idle connected account only; one check per 10 minutes, each review no more often than every 6 hours. No automatic posting or account switching.</p>
+    <p id="monitorHint" class="hint">{{ 'Poster mode: no extension required.' if poster_mode else 'Extension 1.0.6 required.' }} Idle connected account only; one check per 10 minutes, each review no more often than every 6 hours. No automatic posting or account switching.</p>
     <p class="hint">VPN: browser IP/DNS/IPv6 protection app ne verify nahi ki. Avast connected aur kill switch on rakhein. <a href="https://api.ipify.org?format=json" target="_blank" rel="noopener noreferrer">Is browser ka IPv4 check karein ↗</a> (external IP service). Google aap ko signed-in account se pehchan sakta hai; VPN review deletion ko prevent nahi karta.</p>
   </section>
   <section class="history-section" aria-labelledby="historyTitle">

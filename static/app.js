@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const selectedBrowser=document.querySelector('meta[name="review-browser"]')?.content || "chrome";
-const browserLabel=selectedBrowser==="firefox" ? "Firefox" : "Chrome";
+const browserLabel=document.querySelector('meta[name="browser-label"]')?.content || (selectedBrowser==="firefox" ? "Firefox" : "Chrome");
 const reloadHint=selectedBrowser==="firefox" ? "Update the signed Tasmee add-on in about:addons" : "Reload Tasmee in chrome://extensions/";
 const activeStates = new Set(["queued","preparing","ready","publishing","submitting"]);
 const labels = {queued:"Queued",preparing:"Preparing",ready:"Ready to post",publishing:"Checking",submitting:"Submitting",posted:"Success",unconfirmed:"Check Google Maps",failed:"Needs attention",cancelled:"Cancelled",interrupted:"Interrupted",resolved:"Business found"};
@@ -102,8 +102,12 @@ function errors(fields={}) {
   }
 }
 function formData() {
+  let target=$("target").value.trim();
+  const city=$("searchCity")?.value || "";
+  if(target && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|www\.|maps\.|google\.)/i.test(target))
+    target += ", " + (city || "United Kingdom");
   return {
-    target:$("target").value.trim(), expected_name:$("expected_name").value.trim(),
+    target, expected_name:$("expected_name").value.trim(),
     text:$("text").value.trim(), stars:Number(document.querySelector('input[name="stars"]:checked')?.value || 0),
     account_email:browser.email
   };
@@ -152,7 +156,7 @@ function controls() {
   document.querySelectorAll('.history-delete').forEach(node=>node.disabled=locked || browser.busy || node.dataset.active==="true");
   $("cancelButton").disabled=requesting || (active?.status==="ready" && browser.busy);
   const capable=extensionCapabilities.includes("saved_checks");
-  badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? "Needs signed 1.0.6" : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
+  badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? (browser.transport==="poster" ? "Unavailable" : "Needs signed 1.0.6") : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
 }
 function renderPreview() {
   const review=reviews.find(item=>item.id===selectedId) || resolvedBusiness;
@@ -184,7 +188,7 @@ function renderPreview() {
   $("reviewMessage").textContent=review.message;
   $("publishButton").hidden=review.status!=="ready";
   $("reconcileButton").hidden=review.status!=="unconfirmed" || browser.transport!=="extension";
-  $("checkSavedButton").hidden=!["posted","unconfirmed"].includes(review.status) || browser.transport!=="extension" || !extensionCapabilities.includes("saved_checks");
+  $("checkSavedButton").hidden=!["posted","unconfirmed"].includes(review.status) || !["extension","poster"].includes(browser.transport) || !extensionCapabilities.includes("saved_checks");
   $("cancelButton").hidden=!["queued","preparing","ready"].includes(review.status);
   $("activityList").replaceChildren(...review.events.map(event=>element("li","",new Date(event.at).toLocaleString()+" · "+event.message)));
   controls();
@@ -266,7 +270,9 @@ async function poll() {
   polling=true;
   try {
     const result=await api("/api/status");
-    browser=result.browser;historyTotal=result.history_total || 0;accounts=result.accounts || [];businesses=result.businesses || [];
+    browser=result.browser;
+    if(browser.transport==="poster") extensionCapabilities=browser.capabilities || [];
+    historyTotal=result.history_total || 0;accounts=result.accounts || [];businesses=result.businesses || [];
     // Retain explicitly loaded older pages, but refresh recent records from the server.
     const incoming=new Set(result.reviews.map(r=>r.id));
     reviews=[...result.reviews,...(historyExpanded ? reviews.filter(r=>!incoming.has(r.id)) : [])];
@@ -277,7 +283,7 @@ async function poll() {
       try {await extensionRequest("ping",{},1500);extensionInstalled=true;} catch {}
     }
     $("extensionSetup").hidden=browser.transport!=="extension" || extensionInstalled;
-    $("extensionState").textContent=extensionInstalled ? browserLabel+" extension connected" : browserLabel+" extension setup";
+    $("extensionState").textContent=browser.transport==="poster" ? "Poster · "+browserLabel+" · no extension required" : extensionInstalled ? browserLabel+" extension connected" : browserLabel+" extension setup";
     const current=reviews.find(r=>activeStates.has(r.status));
     if(current) selectedId=current.id;
     badge($("connectionBadge"),browser.status,browser.status==="connected" ? "Google connected" : browser.busy ? "Browser working…" : browser.status==="signing_in" ? "Finish Google sign-in" : "Not connected");
@@ -321,16 +327,18 @@ $("reviewForm").addEventListener("submit",event=>{
   action(async()=>{
     const data=formData();
     if(!data.target) {errors({target:"Enter a Google Maps link or business search."});return;}
-    if(browser.transport==="extension") {
-      const extension=await extensionRequest("ping",{},2000);
-      if(!extension.version || extension.version.localeCompare("1.0.4",undefined,{numeric:true})<0)
-        throw new Error(reloadHint+" to version 1.0.4 or later, then refresh this dashboard.");
-      // Resolve from Google's selected place, never infer a name from a URL slug.
-      // This also supports Start with only a link; no draft is queued yet.
-      const request=await api("/api/business/resolve",{target:data.target});
+    if(["extension","poster"].includes(browser.transport)) {
+      if(browser.transport==="extension") {
+        const extension=await extensionRequest("ping",{},2000);
+        if(!extension.version || extension.version.localeCompare("1.0.4",undefined,{numeric:true})<0)
+          throw new Error(reloadHint+" to version 1.0.4 or later, then refresh this dashboard.");
+      }
       resolving=true;controls();
       let result;
-      try {result=await extensionRequest("resolve",request);} finally {resolving=false;controls();}
+      try {
+        const response=await api("/api/business/resolve",{target:data.target});
+        result=browser.transport==="extension" ? await extensionRequest("resolve",response) : response;
+      } finally {resolving=false;controls();}
       const info=result.assertion;
       if(!info || typeof info.name!=="string" || !info.name.trim() || info.name.length>200 || info.email!==browser.email)
         throw new Error("The business and Google account could not be verified.");
@@ -395,11 +403,13 @@ $("reviewForm").addEventListener("input",saveDraft);
 $("text").addEventListener("input",clearPolicyWarnings);
 $("text").addEventListener("blur",()=>{checkReviewPolicy().catch(()=>{});});
 $("reviewForm").addEventListener("input",()=>{if(draftReviewId && !reviews.some(r=>r.id===draftReviewId && activeStates.has(r.status))) draftReviewId=null;});
-$("target").addEventListener("input",()=>{
+function invalidateBusiness() {
   $("expected_name").value="";
   resolvedBusiness=null;
   if(!reviews.some(r=>activeStates.has(r.status))) {selectedId=null;renderPreview();}
-});
+}
+$("target").addEventListener("input",invalidateBusiness);
+$("searchCity")?.addEventListener("change",invalidateBusiness);
 $("clearHistoryButton").addEventListener("click",()=>deleteLocal());
 $("historySearch").addEventListener("input",renderHistory);
 $("historyFilter").addEventListener("change",renderHistory);
@@ -412,6 +422,12 @@ $("loadHistoryButton").addEventListener("click",()=>action(async()=>{
 $("accountSelect").addEventListener("change",controls);
 $("switchAccountButton").addEventListener("click",()=>action(async()=>{
   const email=$("accountSelect").value;
+  if(browser.transport==="poster") {
+    $("email").value=email;
+    await api("/api/browser/select",{email});
+    notice("Selected account is being checked in the poster browser. Nothing was posted.");
+    return;
+  }
   await extensionRequest("ping",{},2000);
   if(!extensionCapabilities.includes("account_selection")) {
     $("email").value=email;
@@ -432,6 +448,10 @@ $("forgetAccountButton").addEventListener("click",async()=>{
 async function checkSaved(review, automatic=false) {
   const token={confirmation_token:review.confirmation_token};
   const reserved=await api("/api/reviews/"+review.id+"/check-start",{...token,automatic});
+  if(reserved.completed) {
+    reviews=reviews.map(r=>r.id===review.id ? reserved.review : r);
+    return;
+  }
   let result;
   try {result=await extensionRequest("check_saved",{review:reserved.review},90000);}
   catch(error) {

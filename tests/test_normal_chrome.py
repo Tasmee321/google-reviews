@@ -42,7 +42,7 @@ class NormalChromeApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name)
+        self.app = create_app(self.temp.name, config={"mode": "extension"})
         self.client = self.app.test_client()
         self.client.get('/')
         with self.client.session_transaction() as state:
@@ -173,7 +173,7 @@ class RealExtensionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app=create_app(Path(self.temp.name)/'data')
+        self.app=create_app(Path(self.temp.name)/'data', config={"mode": "extension"})
         self.server=make_server('127.0.0.1',0,self.app,threaded=True)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()
