@@ -3,7 +3,13 @@ const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("n
 const {webcrypto}=require("node:crypto");
 const root=path.resolve(__dirname,"..");
 const context={URL,URLSearchParams,setTimeout,clearTimeout,Date,Promise,Map,Set,performance,
-  crypto:webcrypto,AbortController,TextDecoder,Uint8Array};
+  crypto:webcrypto,AbortController,TextDecoder,Uint8Array,fixtureResponse:response};
+// Firefox's native Window.fetch checks its receiver; arrow-only fixtures hide
+// the illegal invocation caused by storing it as a method on the guard object.
+vm.runInNewContext(`globalThis.fetch=function(url){
+  if(this!==globalThis) throw new TypeError("fetch called without its Window receiver");
+  return Promise.resolve(fixtureResponse(url));
+};`,context);
 vm.runInNewContext(fs.readFileSync(path.join(root,"chrome_extension/network_guard.js"),"utf8"),context);
 const {UKNetworkGuard,parseTrace}=context.TasmeeNetworkGuard;
 function response(url,text="ip=8.8.8.8\nloc=GB\n",options={}) {
@@ -13,6 +19,8 @@ function response(url,text="ip=8.8.8.8\nloc=GB\n",options={}) {
   return result;
 }
 async function main() {
+  const nativeReceiver=new UKNetworkGuard();
+  assert.equal((await nativeReceiver.check()).allowed,true,"Default fetch must retain the browser global receiver");
   assert.equal(parseTrace("ip=8.8.8.8\nloc=GB").family,4);
   assert.equal(parseTrace("ip=2606:4700:4700::1111\nloc=GB").family,6);
   for(const address of ["192.168.1.1","10.0.0.1","127.0.0.1","100.64.0.1","169.254.1.1","172.16.0.1",

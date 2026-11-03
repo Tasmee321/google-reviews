@@ -23,8 +23,12 @@ The outputs are:
 
 - `firefox_extension/`: unpacked Firefox add-on files.
 - `dist/tasmee-firefox-unsigned.xpi`: the unsigned distribution package.
-- `dist/tasmee-firefox-1.0.7-unsigned.xpi`: the same unsigned versioned package.
-- `dist/tasmee-firefox-1.0.7-source.zip`: all inputs needed to reproduce this build.
+- `dist/tasmee-firefox-1.0.8-unsigned.xpi`: the same unsigned versioned package.
+- `dist/tasmee-firefox-1.0.8-source.zip`: all inputs needed to reproduce this build.
+
+Version 1.0.8 fixes Firefox's native fetch receiver binding, which caused 1.0.7
+to fail before checking the country. No permissions, endpoints, proxy settings,
+data declarations or UK-only verification rules change. Existing sessions stay intact.
 
 ## Build transformations
 
@@ -44,7 +48,7 @@ implementation produce identical unsigned XPI/source ZIP bytes. Across compressi
 implementations, compare extracted names and file contents as well. Mozilla adds
 its own signing files after the unsigned package is submitted.
 
-To update a permanent installation, submit version 1.0.7 under the **existing**
+To update a permanent installation, submit version 1.0.8 under the **existing**
 Mozilla add-on ID, obtain the signed XPI, then install that signed file through
 `about:addons` in the existing dedicated profile. Approve the additional Cloudflare
 host/data permissions and refresh the dashboard. Building here neither uploads

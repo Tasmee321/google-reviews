@@ -39,7 +39,8 @@
     return {country:fields.loc,family:publicFamily(fields.ip)};
   }
   class UKNetworkGuard {
-    constructor({fetcher=globalThis.fetch,clock=()=>performance.now(),wallClock=()=>Date.now(),timeoutMs=8000}={}) {
+    // Firefox's Window.fetch rejects being called with this guard as its receiver.
+    constructor({fetcher=globalThis.fetch.bind(globalThis),clock=()=>performance.now(),wallClock=()=>Date.now(),timeoutMs=8000}={}) {
       this.fetcher=fetcher;this.clock=clock;this.wallClock=wallClock;this.timeoutMs=timeoutMs;
       this.verifiedAt=null;this.queue=Promise.resolve();
       this.state={status:"unknown",country:"",code:"not_checked",checked_at:"",expires_at:"",address_families:[]};

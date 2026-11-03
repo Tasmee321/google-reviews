@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tasmee Personal Reviews",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Connect your local dashboard with your own signed-in Google Maps browser.",
   "permissions": ["storage"],
   "host_permissions": ["https://www.google.com/*", "https://google.com/*", "https://maps.google.com/*", "https://www.google.co.uk/*", "https://www.google.com.pk/*", "http://127.0.0.1/*", "http://localhost/*", "https://www.cloudflare.com/*", "https://1.1.1.1/*"],

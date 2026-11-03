@@ -65,8 +65,8 @@ def main(argv=None):
             from build_firefox_extension import firefox_sources
             extension = firefox_sources()
             manifest = json.loads(extension["manifest.json"])
-            if manifest["version"] != "1.0.7" or manifest["background"] != {"scripts": ["network_guard.js", "background.js"]}:
-                raise ValueError("Extension sources are incomplete; update the complete 1.0.7 source package.")
+            if manifest["version"] != "1.0.8" or manifest["background"] != {"scripts": ["network_guard.js", "background.js"]}:
+                raise ValueError("Extension sources are incomplete; update the complete 1.0.8 source package.")
         if not args.skip_browser:
             if cfg["mode"] == "extension":
                 from personal_browser import browser_kind, firefox_executable
@@ -89,7 +89,7 @@ def main(argv=None):
         guard_enabled = cfg["mode"] == "extension" or cfg["network_guard"]["enabled"]
         print("UK-IP guard: " + ("enabled; browser checks run before Google sign-in/posting" if guard_enabled else "DISABLED"))
         if cfg["mode"] == "extension":
-            print("Install extension 1.0.7 or newer in the selected browser. Its browser-side UK-IP guard is always enabled.")
+            print("Install extension 1.0.8 or newer in Firefox for the native network-check fix. Its browser-side UK-IP guard is always enabled.")
             print("Ordinary Firefox requires a Mozilla-signed add-on for permanent installation; this check does not sign or verify an installed add-on.")
         print("VPN routing and live Google sign-in were not tested by this offline check.")
         if args.diagnostics:

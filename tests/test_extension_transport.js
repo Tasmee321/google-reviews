@@ -37,7 +37,7 @@ async function exercise(folder, kind) {
   }
   const ping=await command("ping");
   assert.equal(ping.ok,true);
-  assert.equal(ping.version,"1.0.7");
+  assert.equal(ping.version,"1.0.8");
   assert.ok(ping.capabilities.includes('saved_checks'));
   assert.ok(ping.capabilities.includes('uk_network_guard'));
   assert.equal(ping.network.status,'unknown');

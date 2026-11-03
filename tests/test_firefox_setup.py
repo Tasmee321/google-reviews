@@ -78,7 +78,7 @@ class FirefoxSetupTests(unittest.TestCase):
     def test_firefox_manifest_and_promise_namespace(self):
         sources = firefox_sources()
         manifest = json.loads(sources["manifest.json"])
-        self.assertEqual(manifest["version"], "1.0.7")
+        self.assertEqual(manifest["version"], "1.0.8")
         self.assertEqual(manifest["background"], {"scripts": ["network_guard.js", "background.js"]})
         settings = manifest["browser_specific_settings"]["gecko"]
         self.assertEqual(settings["id"], "tasmee-personal-reviews@local.invalid")
@@ -124,8 +124,8 @@ class FirefoxSetupTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-I", "-S", "build_firefox_extension.py"], cwd=folder,
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((folder / "dist/tasmee-firefox-1.0.7-unsigned.xpi").read_bytes(), firefox_archive().getvalue())
-        self.assertEqual((folder / "dist/tasmee-firefox-1.0.7-source.zip").read_bytes(), source_archive().getvalue())
+        self.assertEqual((folder / "dist/tasmee-firefox-1.0.8-unsigned.xpi").read_bytes(), firefox_archive().getvalue())
+        self.assertEqual((folder / "dist/tasmee-firefox-1.0.8-source.zip").read_bytes(), source_archive().getvalue())
 
     def firefox_app(self):
         with patch.dict(os.environ, {"REVIEW_BROWSER": "firefox"}):

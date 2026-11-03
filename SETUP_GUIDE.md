@@ -15,11 +15,12 @@ Supplied defaults now select `mode=extension` and ordinary Firefox. Check old
 Keep the existing `personal_data/firefox-profile/`; never reset it to apply an update.
 The same signed add-on ID and Firefox login profile must be reused.
 
-This release needs **extension 1.0.7**. Build it with `python build_firefox_extension.py`,
+For Firefox, use **extension 1.0.8**. It fixes the native network request invocation
+in 1.0.7; the UK check remains mandatory. Build it with `python build_firefox_extension.py`,
 submit the unsigned XPI/source ZIP under the existing Mozilla add-on
 `tasmee-personal-reviews@local.invalid`, and obtain Mozilla's signed XPI. The build
 does not upload, sign or install anything. In the dedicated Firefox window open
-`about:addons` → gear → **Install Add-on From File**, select the signed 1.0.7 XPI,
+`about:addons` → gear → **Install Add-on From File**, select the signed 1.0.8 XPI,
 approve its added network/data permissions and refresh the dashboard. The older
 signed 1.0.6 is not compatible with UK-IP protection. Do not disable Firefox's
 signing checks. Temporary installation in `about:debugging` is development-only
@@ -151,7 +152,7 @@ nor a UK VPN exit hides the identity of a signed-in Google account.
 
 ## Sign-in, review and account switching
 
-1. Connect Avast UK and install the signed 1.0.7 extension in dedicated Firefox,
+1. Connect Avast UK and install the signed 1.0.8 extension in dedicated Firefox,
    then **Check UK IP**. Enter the Google email, choose **Open Google sign-in**,
    and finish password/2FA directly on Google's page in dedicated Firefox.
 2. Click **Check connection**. The exact connected email is verified and saved as
@@ -255,7 +256,8 @@ is still sensitive. Do not include session directories in source ZIPs or reports
 | Google account mismatch | Select the intended account in Google, then Check connection. |
 | Form/branch/rating cannot be verified | Inspect Maps; the draft has not been submitted. |
 | Unconfirmed submission | Inspect your own saved review before any further attempt. |
-| Extension missing/outdated | Install Mozilla-signed1.0.7 in the existing dedicated Firefox profile; approve permissions and refresh. |
+| Extension missing/outdated | Install Mozilla-signed 1.0.8 in the existing dedicated Firefox profile and refresh. |
+| Firefox 1.0.7 says UK IP could not be confirmed | Update to signed 1.0.8; its native fetch binding is fixed. Do not disable UK protection. |
 | Wrong browser/mode | Check `mode`, old `.env` overrides and which launcher you used. |
 | UK IP not confirmed | Connect Avast UK, check internet and retry Check UK IP. Cloudflare/service failures also block. |
 | Local protection failed | Close the browser/app, check ownership and remove unsafe links from the intended data tree; do not weaken permissions. |

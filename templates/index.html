@@ -93,7 +93,7 @@
         <details id="extensionSetup" class="extension-setup" hidden open>
           <summary>{{ 'Connect your dedicated Firefox' if browser_kind == 'firefox' else 'Connect your normal Chrome' }}</summary>
           {% if browser_kind == 'firefox' %}
-          <ol><li>Mozilla Developer Hub mein <strong>existing Tasmee add-on</strong> ke andar version <strong>1.0.7</strong> upload karein; naya add-on ID na banayein.</li><li>Mozilla se milne wali <strong>signed XPI</strong> yahan Firefox ke <strong>about:addons → gear → Install Add-on From File</strong> se install karein.</li><li>Nayi network permissions approve karke dashboard refresh karein. Purana 1.0.6 UK-IP protection ke saath compatible nahi.</li></ol>
+          <ol><li>Mozilla Developer Hub mein <strong>existing Tasmee add-on</strong> ke andar version <strong>1.0.8</strong> upload karein; naya add-on ID na banayein.</li><li>Mozilla se milne wali <strong>signed XPI</strong> yahan Firefox ke <strong>about:addons → gear → Install Add-on From File</strong> se install karein.</li><li>Dashboard refresh karein. 1.0.8 mein Firefox network-check fix hai; permissions aur saved session unchanged hain.</li></ol>
           {% else %}
           <ol><li>Open <strong>chrome://extensions</strong> in normal Chrome.</li><li>Enable Developer mode, click <strong>Load unpacked</strong>, and select this folder:</li></ol>
           {% endif %}

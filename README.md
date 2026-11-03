@@ -5,6 +5,11 @@ the Tasmee extension. One verified Google account and one review at a time;
 posting needs an explicit **Post this review** click. Firefox is not launched
 through Playwright or a remote debugger. The older poster flow remains optional.
 
+**Firefox fix: 1.0.8.** Version 1.0.7 called native `fetch` with the wrong receiver,
+so Firefox failed before the IP lookup. Install the signed 1.0.8 update under the
+same add-on ID. This fixes the request, not VPN routing; both endpoints must still
+report GB. Permissions, saved sessions and the dashboard protocol are unchanged.
+
 ## Windows quick start
 
 1. Install Python 3.11+ with **Add Python to PATH**, and ordinary Mozilla Firefox 142+.
@@ -14,7 +19,7 @@ through Playwright or a remote debugger. The older poster flow remains optional.
 4. Run `run.bat` or `start_localhost.bat`. Its private link unlocks the dashboard;
    keep the terminal open and do not share that link/code. The default opens the
    same dedicated Firefox profile at `personal_data/firefox-profile/` every time.
-5. Install the **Mozilla-signed Tasmee 1.0.7 add-on** in that Firefox profile using
+5. Install the **Mozilla-signed Tasmee 1.0.8 add-on** in that Firefox profile using
    `about:addons` → gear → **Install Add-on From File**, then refresh the dashboard.
    Build outputs here are unsigned: building does not sign or install the add-on.
    Update the existing Mozilla add-on ID, do not register a different ID.
@@ -68,7 +73,7 @@ remove it or use `REVIEW_MODE=extension` and `REVIEW_BROWSER=firefox`.
 The 1.0.7 extension always enforces its browser-side guard; legacy 1.0.6 is not compatible.
 
 `python build_firefox_extension.py` creates deterministic unsigned XPI and complete
-stdlib-only build-source ZIP files for 1.0.7. See [FIREFOX_SOURCE_BUILD.md](FIREFOX_SOURCE_BUILD.md).
+stdlib-only build-source ZIP files for 1.0.8. See [FIREFOX_SOURCE_BUILD.md](FIREFOX_SOURCE_BUILD.md).
 Permanent ordinary-Firefox installation requires Mozilla signing. No signing,
 upload or signing-security bypass is performed by the build.
 
