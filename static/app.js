@@ -2,7 +2,7 @@
 if(location.hash.startsWith("#unlock=")) history.replaceState(null,"",location.pathname+location.search);
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
-const selectedBrowser=document.querySelector('meta[name="review-browser"]')?.content || "chrome";
+const selectedBrowser=document.querySelector('meta[name="review-browser"]')?.content || "firefox";
 const browserLabel=document.querySelector('meta[name="browser-label"]')?.content || (selectedBrowser==="firefox" ? "Firefox" : "Chrome");
 const reloadHint=selectedBrowser==="firefox" ? "Update the signed Tasmee add-on in about:addons" : "Reload Tasmee in chrome://extensions/";
 const activeStates = new Set(["queued","preparing","ready","publishing","submitting"]);
@@ -19,6 +19,41 @@ let extensionInstalled=false, extensionChecked=false;
 let policyRequest=0;
 let changingCity=false, statusLoaded=false;
 let policyReviewId=null;
+let networkFlight=null;
+const protectedApi = new Set(["/api/browser/login","/api/browser/check","/api/browser/select","/api/browser/verified","/api/business/resolve","/api/reviews"]);
+function requiresNetwork(path) {
+  return protectedApi.has(path) || /^\/api\/reviews\/[a-f0-9]{24}\/(publish|submitting|check-start|reconcile)$/.test(path);
+}
+function compatibleExtension(result) {
+  const parts=typeof result.version==="string" && /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(result.version);
+  const version=parts && parts.slice(1).map(Number);
+  return version && (version[0]>1 || version[0]===1 && (version[1]>0 || version[1]===0 && version[2]>=7)) &&
+    Array.isArray(result.capabilities) && result.capabilities.includes("uk_network_guard");
+}
+async function checkNetwork() {
+  if(networkFlight) return networkFlight;
+  networkFlight=(async()=>{
+    if($("networkStatus")) $("networkStatus").textContent="Checking this browser's UK IP…";
+    try {
+      const challenge=await api("/api/browser/network",{});
+      if(!challenge.requires_extension) return challenge.network;
+      const extension=await extensionRequest("ping",{},2000);
+      extensionInstalled=true;
+      const result=await extensionRequest("network_check",{challenge:challenge.challenge},20000);
+      if(result.challenge!==challenge.challenge) throw new Error("UK-IP check did not match this request. Check again.");
+      const report=await api("/api/browser/network-result",{challenge:challenge.challenge,extension,network:result.network});
+      browser.network=report.network;
+      if(!report.network.allowed) throw new Error(report.network.message);
+      return report.network;
+    } catch(error) {
+      if(browser.transport==="extension") {
+        try {const report=await api("/api/browser/network-failure",{});browser.network=report.network;} catch {}
+      }
+      throw error;
+    }
+  })();
+  try {return await networkFlight;} finally {networkFlight=null;controls();}
+}
 
 function clearPolicyWarnings() {
   policyRequest++;
@@ -42,9 +77,18 @@ function extensionRequest(action,data={},timeout=150000) {
       if(event.source!==window || event.origin!==location.origin || event.data?.type!=="TASMEE_RESPONSE" || event.data.id!==id) return;
       clearTimeout(timer);window.removeEventListener("message",receive);
       const result=event.data.response;
-      if(!result?.ok) reject(new Error(result?.message || "Browser extension did not complete the action."));
+      if(!result?.ok) {
+        const error=new Error(result?.message || "Browser extension did not complete the action.");
+        if(result?.network && !result.network.allowed && browser.transport==="extension") {
+          api("/api/browser/network-failure",{}).then(report=>{browser.network=report.network;controls();}).finally(()=>reject(error)).catch(()=>{});
+        } else reject(error);
+      }
       else if(action==="ping" && selectedBrowser==="firefox" && result.browser_kind!=="firefox")
         reject(new Error("Use the dedicated Firefox dashboard, not personal Chrome."));
+      else if(action==="ping" && !compatibleExtension(result)) {
+        extensionInstalled=false;
+        reject(new Error(reloadHint+" to version 1.0.7 or later for UK-IP protection, then refresh this dashboard."));
+      }
       else {
         if(action==="ping" && typeof result.version==="string")
           $("extensionState").title="Extension version: "+result.version;
@@ -72,6 +116,7 @@ function notice(message, error=false) {
   $("notice").hidden = !message;
 }
 async function api(path, data) {
+  if(data!==undefined && browser.transport==="extension" && requiresNetwork(path)) await checkNetwork();
   const response = await fetch(path, data === undefined ? {cache:"no-store"} : {
     method:"POST", headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},
     body:JSON.stringify(data)
@@ -164,11 +209,11 @@ function controls() {
   document.querySelectorAll('.history-delete').forEach(node=>node.disabled=locked || browser.busy || node.dataset.active==="true");
   $("cancelButton").disabled=requesting || (active?.status==="ready" && browser.busy);
   const capable=extensionCapabilities.includes("saved_checks");
-  badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? (browser.transport==="poster" ? "Unavailable" : "Needs signed 1.0.6") : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
+  badge($("monitorStatus"), monitoring ? "preparing" : "idle", !capable ? (browser.transport==="poster" ? "Unavailable" : "Needs signed 1.0.7") : !$("autoCheck").checked ? "Paused" : browser.status!=="connected" ? "Connect Google" : locked || browser.busy ? "Waiting for idle" : "Monitoring saved status");
   renderCityLocation();
   if($("networkStatus")) {
     const network=browser.network;
-    $("networkStatus").textContent=network ? network.message+(network.checked_at ? " Last check: "+new Date(network.checked_at).toLocaleTimeString() : "") : "UK-IP check unavailable.";
+    $("networkStatus").textContent=networkFlight ? "Checking this browser's UK IP…" : network ? network.message+(network.checked_at ? " Last check: "+new Date(network.checked_at).toLocaleTimeString() : "") : "Check UK IP before signing in.";
   }
 }
 function renderCityLocation(syncSelection=false) {
@@ -370,8 +415,8 @@ $("checkButton").addEventListener("click",()=>action(async()=>{
   }
 }));
 $("networkCheckButton")?.addEventListener("click",()=>action(async()=>{
-  const result=await api("/api/browser/network",{});
-  notice(result.network.message);
+  const network=await checkNetwork();
+  notice(network.message);
 }));
 $("policy_confirmed").addEventListener("change",()=>{
   $("policy_confirmedError").hidden=true;
@@ -385,8 +430,7 @@ $("reviewForm").addEventListener("submit",event=>{
     if(["extension","poster"].includes(browser.transport)) {
       if(browser.transport==="extension") {
         const extension=await extensionRequest("ping",{},2000);
-        if(!extension.version || extension.version.localeCompare("1.0.4",undefined,{numeric:true})<0)
-          throw new Error(reloadHint+" to version 1.0.4 or later, then refresh this dashboard.");
+        if(!compatibleExtension(extension)) throw new Error(reloadHint+" to version 1.0.7 or later, then refresh this dashboard.");
       }
       resolving=true;controls();
       let result;
@@ -443,8 +487,7 @@ $("reconcileButton").addEventListener("click",()=>action(async()=>{
   const review=reviews.find(r=>r.id===selectedId);
   if(!review || review.status!=="unconfirmed") throw new Error("Select an uncertain review first.");
   const extension=await extensionRequest("ping",{},2000);
-  if(!extension.version || extension.version.localeCompare("1.0.4",undefined,{numeric:true})<0)
-    throw new Error(reloadHint+" to version 1.0.4 or later, then refresh this dashboard.");
+  if(!compatibleExtension(extension)) throw new Error(reloadHint+" to version 1.0.7 or later, then refresh this dashboard.");
   const result=await extensionRequest("reconcile",{review});
   await api("/api/reviews/"+review.id+"/reconcile",{confirmation_token:review.confirmation_token,assertion:result.assertion});
   notice("Success: your saved review was verified. Nothing was posted again.");
@@ -508,7 +551,7 @@ $("switchAccountButton").addEventListener("click",()=>action(async()=>{
   if(!extensionCapabilities.includes("account_selection")) {
     $("email").value=email;
     await api("/api/browser/login",{email});await extensionRequest("login",{email});
-    notice("Google Maps mein selected account choose karein, phir Check connection dabayein. Direct selector ke liye signed extension 1.0.6 chahiye.");return;
+    notice("Google Maps mein selected account choose karein, phir Check connection dabayein. Direct selector ke liye signed extension 1.0.7 chahiye.");return;
   }
   await api("/api/browser/select",{email});$("email").value=email;
   const result=await extensionRequest("check",{email});
@@ -556,4 +599,11 @@ async function autoCheckSaved() {
 try {$("autoCheck").checked=localStorage.getItem(monitorKey)!=="off";} catch {}
 $("autoCheck").addEventListener("change",()=>{try {localStorage.setItem(monitorKey,$("autoCheck").checked ? "on" : "off");} catch {}controls();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden) poll();});
-clearDraft();poll();setInterval(poll,2000);setInterval(autoCheckSaved,30000);
+async function checkIdleNetwork() {
+  if(document.hidden || browser.transport!=="extension" || browser.status!=="connected" ||
+     !extensionInstalled || requesting || monitoring || polling || browser.busy || networkFlight) return;
+  monitoring=true;controls();
+  try {await checkNetwork();} catch(error) {notice(error.message,true);}
+  finally {monitoring=false;await poll();controls();}
+}
+clearDraft();poll();setInterval(poll,2000);setInterval(autoCheckSaved,30000);setInterval(checkIdleNetwork,30000);

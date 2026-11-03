@@ -12,7 +12,7 @@ PROFILE = ROOT / "personal_data" / "firefox-profile"
 
 
 def browser_kind():
-    value = os.getenv("REVIEW_BROWSER", "chrome").strip().lower()
+    value = os.getenv("REVIEW_BROWSER", "firefox").strip().lower()
     if value not in {"chrome", "firefox"}:
         raise ReviewError("REVIEW_BROWSER must be chrome or firefox.")
     return value

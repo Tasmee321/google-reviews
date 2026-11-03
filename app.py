@@ -103,8 +103,8 @@ def create_app(data_dir=None, worker_factory=None, config=None):
                 return jsonify(ok=False, message="Refresh this page before trying again."), 403
             if (cfg["network_guard"]["enabled"] and getattr(worker, "extension_mode", False)
                     and request.endpoint in {"login", "check_login", "select_account", "verified_browser", "prepare",
-                                             "resolve_business", "publish", "submitting", "start_saved_check"}):
-                raise ReviewError("UK-IP protection requires poster mode. Legacy extension traffic cannot be verified by this guard.", 409)
+                                             "resolve_business", "publish", "submitting", "start_saved_check", "reconcile_review"}):
+                worker.require_network()
 
     @app.after_request
     def security_headers(response):
@@ -170,11 +170,26 @@ def create_app(data_dir=None, worker_factory=None, config=None):
     @app.post("/api/browser/network")
     def network_check():
         body()
+        if getattr(worker, "extension_mode", False):
+            return jsonify(ok=True, requires_extension=True, challenge=worker.network_challenge())
         if getattr(worker, "transport", "") != "poster":
             raise ReviewError("UK-IP checks require the poster browser.", 409)
         if store.active() or worker.snapshot()["busy"]:
             raise ReviewError("Finish or cancel the current action before checking the network.", 409)
         return jsonify(ok=True, network=worker.command("network", wait=True))
+
+    @app.post("/api/browser/network-result")
+    def network_result():
+        if not getattr(worker, "extension_mode", False):
+            raise ReviewError("Extension transport is unavailable.", 409)
+        return jsonify(ok=True, network=worker.accept_network(body()))
+
+    @app.post("/api/browser/network-failure")
+    def network_failure():
+        body()
+        if not getattr(worker, "extension_mode", False):
+            raise ReviewError("Extension transport is unavailable.", 409)
+        return jsonify(ok=True, network=worker.invalidate_network())
 
     @app.get("/api/history")
     def history():
@@ -238,7 +253,7 @@ def create_app(data_dir=None, worker_factory=None, config=None):
     def extension_download():
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
-            for filename in ("manifest.json", "background.js", "dashboard.js", "google.js", "review_widget.js", "popup.html", "popup.css"):
+            for filename in ("manifest.json", "background.js", "network_guard.js", "dashboard.js", "google.js", "review_widget.js", "popup.html", "popup.css"):
                 path = ROOT / "chrome_extension" / filename
                 if path.is_file():
                     output.write(path, "tasmee-chrome-extension/" + path.name)
@@ -253,7 +268,7 @@ def create_app(data_dir=None, worker_factory=None, config=None):
         if store.active():
             raise ReviewError("Finish or cancel the current review first.", 409)
         worker.command("login", email.strip().lower())
-        return jsonify(ok=True, requires_extension=getattr(worker, "browser_kind", "chrome") == "firefox",
+        return jsonify(ok=True, requires_extension=getattr(worker, "extension_mode", False),
                        message="Complete Google sign-in and 2FA in the browser window."), 202
 
     @app.get("/extension/firefox/download")

@@ -61,6 +61,12 @@ def main(argv=None):
                        or len(names) != len(set(names)) for names in cities.values())):
             raise ValueError("uk_cities.json must contain city lists for all four UK nations.")
         importlib.import_module("app")
+        if cfg["mode"] == "extension":
+            from build_firefox_extension import firefox_sources
+            extension = firefox_sources()
+            manifest = json.loads(extension["manifest.json"])
+            if manifest["version"] != "1.0.7" or manifest["background"] != {"scripts": ["network_guard.js", "background.js"]}:
+                raise ValueError("Extension sources are incomplete; update the complete 1.0.7 source package.")
         if not args.skip_browser:
             if cfg["mode"] == "extension":
                 from personal_browser import browser_kind, firefox_executable
@@ -80,9 +86,11 @@ def main(argv=None):
                         raise ValueError("Configured browser is missing. Install Chrome/Edge, or select chromium in config.json and rerun install.bat.")
         print(f"Setup OK: {cfg['mode']} mode; http://127.0.0.1:{cfg['port']}/; {sum(map(len, cities.values()))} UK cities.")
         print("No application proxy. Connect Avast SecureLine VPN to an available UK server yourself.")
-        print("UK-IP guard: " + ("enabled; browser checks run before Google sign-in/posting" if cfg["network_guard"]["enabled"] else "DISABLED"))
-        if cfg["mode"] == "extension" and cfg["network_guard"]["enabled"]:
-            print("Legacy extension actions are blocked by the enabled guard. Use poster mode for UK-IP protection.")
+        guard_enabled = cfg["mode"] == "extension" or cfg["network_guard"]["enabled"]
+        print("UK-IP guard: " + ("enabled; browser checks run before Google sign-in/posting" if guard_enabled else "DISABLED"))
+        if cfg["mode"] == "extension":
+            print("Install extension 1.0.7 or newer in the selected browser. Its browser-side UK-IP guard is always enabled.")
+            print("Ordinary Firefox requires a Mozilla-signed add-on for permanent installation; this check does not sign or verify an installed add-on.")
         print("VPN routing and live Google sign-in were not tested by this offline check.")
         if args.diagnostics:
             from diagnostics import Diagnostics, diagnostic_report

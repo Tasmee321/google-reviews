@@ -7,7 +7,7 @@ window.addEventListener("message", async event => {
   if (event.source !== window || event.origin !== location.origin || event.data?.type !== "TASMEE_REQUEST") return;
   if (location.pathname !== "/" || !document.querySelector('meta[name="csrf-token"]')) return;
   const {id, action, data} = event.data;
-  if (typeof id !== "string" || !["ping","login","check","resolve","prepare","verify","submit","discard","reconcile","check_saved"].includes(action)) return;
+  if (typeof id !== "string" || !["ping","network_check","login","check","resolve","prepare","verify","submit","discard","reconcile","check_saved"].includes(action)) return;
   let response;
   try {
     if (action === "submit") {

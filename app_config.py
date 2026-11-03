@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 DEFAULTS = {
-    "mode": "poster", "port": 5000, "browser_channel": "chrome",
+    "mode": "extension", "port": 5000, "browser_channel": "chrome",
     "locale": "en-GB", "device": None, "proxies": [], "delay_range": [0, 0],
     "city_geolocation": False,
     "network_guard": {"enabled": True, "interval_seconds": 30, "timeout_ms": 8000},

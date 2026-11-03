@@ -18,10 +18,24 @@ collection endpoint, advertising, analytics or background review posting.
 
 Google independently handles its services under https://policies.google.com/privacy.
 Reviews can identify your Google Maps profile; VPN use does not anonymize that
-profile. Neither this add-on nor the dashboard verifies VPN protection, rotates
-IPs, changes browser fingerprints, or spoofs your device location.
+profile. Neither this add-on nor the dashboard controls Avast, rotates IPs,
+changes browser fingerprints, or spoofs your device location.
 
-Version 1.0.6 can select an already signed-in Google account and perform
+Version 1.0.7 checks the country of the extension browser's outbound connection
+using `https://www.cloudflare.com/cdn-cgi/trace` and `https://1.1.1.1/cdn-cgi/trace`.
+Both must report GB before protected Google actions. Checks also occur about
+every 30 seconds while the dashboard is visible, connected and idle. Cloudflare
+receives your public IP and normal request metadata, but no review text, Google
+password, cookies or account email are supplied. Requests omit credentials and
+referrers. Full IPs are parsed transiently, not retained in extension state or
+diagnostic reports. Only country, address families, check times and fixed status
+codes are returned to the local dashboard. A worker restart resets protection
+to unchecked. Country samples do not establish a physical visit, Avast connection,
+same-city location, continuous protection, or absence of DNS/all IPv6 leaks.
+Browser-side protection stays enabled; unavailable/non-UK checks block actions.
+It does not close Firefox or block unrelated manual browser activity.
+
+The add-on can select an already signed-in Google account and perform
 read-only saved-review checks in temporary background Maps tabs while the
 dashboard is open, idle and monitoring is enabled. Checks do not post reviews;
 matching an own-review card does not establish public visibility. Review IDs,
@@ -39,6 +53,6 @@ The optional browser IPv4-check link opens api.ipify.org only when clicked;
 that external service observes the connecting IP. It does not verify DNS,
 IPv6, per-process VPN routing, or leak protection.
 
-Firefox's data-consent declarations cover local dashboard data exchange as well
-as user-requested Google interactions. Installation does not authorize a review
+Firefox's data-consent declarations cover local dashboard data exchange, country
+checks and user-requested Google interactions. Installation does not authorize a review
 to be posted. Do not install if you do not agree to these data-handling operations.

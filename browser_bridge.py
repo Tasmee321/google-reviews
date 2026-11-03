@@ -1,5 +1,5 @@
 # browser_bridge.py
-"""Use the person's ordinary Chrome session through a narrowly scoped extension."""
+"""Use an ordinary browser session through the guarded, signed Firefox extension."""
 import os
 import shutil
 import subprocess
@@ -9,11 +9,12 @@ import time
 import webbrowser
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlsplit
 
 from review_store import ReviewError, business_location, maps_url, normalize_name, valid_email
 from poster import business_key
 from personal_browser import browser_kind
+from extension_network import ExtensionNetwork
 
 
 def open_normal_chrome(url):
@@ -29,7 +30,7 @@ def open_normal_chrome(url):
         raise ReviewError("Open Chrome and visit Google Maps to sign in.")
 
 
-class BrowserBridge:
+class BrowserBridge(ExtensionNetwork):
     extension_mode = True
     ACTION_TIMEOUT = 180
 
@@ -39,17 +40,18 @@ class BrowserBridge:
         self.browser_kind = browser_kind()
         self.browser_label = "Firefox" if self.browser_kind == "firefox" else "Chrome"
         self._lock = threading.RLock()
+        self.init_network()
         self.expected_email = ""
         self.verification = None
         self.operation = None
         self.state = {"status": "disconnected", "email": "", "busy": False, "transport": "extension",
                       "browser_kind": self.browser_kind,
-                      "message": f"Sign in in {self.browser_label}, then check connection. Load the Tasmee extension in that same browser."}
+                      "message": f"Install Tasmee 1.0.7 or later in {self.browser_label}. Check UK IP, sign in normally, then check connection."}
 
     def snapshot(self):
         with self._lock:
             self._expire_verification()
-            return dict(self.state)
+            return {**self.state, "network": self.network_snapshot(), "extension_version": self._extension_version}
 
     def _expire_verification(self):
         stamp = time.monotonic()
@@ -84,6 +86,7 @@ class BrowserBridge:
 
     def reserve_check(self, review_id):
         with self._lock:
+            self.require_network()
             self._expire_verification()
             review = self.store.get(review_id)
             if self.state["busy"] or self.store.active() or self.state["status"] != "connected":
@@ -120,6 +123,8 @@ class BrowserBridge:
 
     def command(self, action, value=None):
         with self._lock:
+            if action in {"login", "select", "check", "prepare", "publish"}:
+                self.require_network()
             self._expire_verification()
             if self.state["busy"]:
                 raise ReviewError("Finish the current action first.", 409)
@@ -137,12 +142,10 @@ class BrowserBridge:
                 self.operation = {"id": value, "expires": time.monotonic() + self.ACTION_TIMEOUT}
             elif action == "discard":
                 self.state["busy"] = False
-        if action == "login" and self.browser_kind == "chrome":
-            open_normal_chrome("https://accounts.google.com/ServiceLogin?" + urlencode({
-                "continue": "https://www.google.com/maps?hl=en", "hl": "en", "Email": value,
-            }))
+        # Only the extension may open Google after its own fresh browser probes.
 
     def connect(self, assertion):
+        self.require_network()
         if not isinstance(assertion, dict):
             raise ReviewError("Expected a Google account verification object.")
         if self.browser_kind == "firefox" and assertion.get("browser_kind") != "firefox":
@@ -158,7 +161,7 @@ class BrowserBridge:
             if self.expected_email and email != self.expected_email:
                 raise ReviewError(f"{self.browser_label} is signed into a different Google account. Switch accounts in Google Maps.", 409)
             self.state.update(status="connected", email=email, busy=False,
-                              message=f"Google account verified in {self.browser_label}. Your browser manages the saved session; VPN protection is not verified by this app.")
+                              message=f"Google account verified in {self.browser_label}. Session stays in this browser profile; each action checks UK egress again.")
             self.store.remember_account(email)
 
     def validate_assertion(self, review_id, assertion):

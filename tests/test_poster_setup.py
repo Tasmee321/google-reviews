@@ -19,10 +19,11 @@ PAYLOAD = {"target": "https://www.google.com/maps/place/Market/data=!1sfixture",
 
 
 class ConfigurationTests(unittest.TestCase):
-    def test_ready_defaults_are_uk_poster_without_proxy_or_device_override(self):
+    def test_ready_defaults_are_extension_with_sandboxed_optional_poster(self):
         cfg = validate_config({})
         options = launch_options(cfg, {})
-        self.assertEqual(cfg["mode"], "poster")
+        self.assertEqual(cfg["mode"], "extension")
+        self.assertTrue(options["chromium_sandbox"])
         self.assertFalse(cfg["city_geolocation"])
         self.assertTrue(cfg["network_guard"]["enabled"])
         self.assertEqual(options["locale"], "en-GB")
@@ -58,13 +59,14 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_device_options_merge_once_and_zero_coordinates_are_valid(self):
         cfg = validate_config({"device": "Pixel 5", "target": {"lat": 0, "lng": 0}, "browser_channel": "chromium"})
-        descriptor = {"viewport": {"width": 393, "height": 851}, "user_agent": "device-fixture", "default_browser_type": "chromium"}
+        descriptor = {"viewport": {"width": 393, "height": 851}, "user_agent": "device-fixture", "default_browser_type": "chromium", "chromium_sandbox": False}
         options = launch_options(cfg, {"Pixel 5": descriptor})
         self.assertEqual(options["viewport"], descriptor["viewport"])
         self.assertEqual(options["geolocation"], {"latitude": 0, "longitude": 0})
         self.assertNotIn("default_browser_type", options)
         self.assertNotIn("channel", options)
         self.assertIn("default_browser_type", descriptor)
+        self.assertTrue(options["chromium_sandbox"])
 
     def test_unknown_device_has_an_actionable_error(self):
         with self.assertRaises(ReviewError):
@@ -105,6 +107,29 @@ class FixtureWorker(ReviewWorker):
         self._state_update(status="connected", email=self._expected_email or EMAIL)
 
 
+class PosterSandboxTests(unittest.TestCase):
+    def test_installed_chrome_starts_without_no_sandbox_switch(self):
+        from check_setup import installed_browser
+        from playwright.sync_api import sync_playwright
+        if not installed_browser("chrome", ""):
+            self.skipTest("Installed Chrome is needed for the optional poster sandbox smoke test.")
+        with tempfile.TemporaryDirectory() as profile, sync_playwright() as playwright:
+            options = launch_options(validate_config({"mode": "poster"}), playwright.devices)
+            self.assertTrue(options["chromium_sandbox"])
+            options.update(headless=True, timeout=20000)
+            context = playwright.chromium.launch_persistent_context(profile, **options)
+            try:
+                page = context.pages[0] if context.pages else context.new_page()
+                # Chrome's local version page exposes launch switches without
+                # requiring an extra --enable-automation test-only switch.
+                page.goto("chrome://version/")
+                arguments = page.locator("#command_line").inner_text().split()
+                self.assertNotIn("--no-sandbox", arguments)
+                self.assertNotIn("--disable-setuid-sandbox", arguments)
+            finally:
+                context.close()
+
+
 class PosterApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -129,9 +154,9 @@ class PosterApiTests(unittest.TestCase):
         self.store.update(review["id"], status="unconfirmed", business_key="place:fixture", business_url=PAYLOAD["target"])
         return self.store.get(review["id"])
 
-    def test_default_factory_is_poster_and_does_not_launch_a_browser(self):
+    def test_explicit_poster_factory_does_not_launch_a_browser(self):
         with tempfile.TemporaryDirectory() as folder:
-            app = create_app(folder, config={})
+            app = create_app(folder, config={"mode": "poster"})
             worker = app.extensions["review_worker"]
             self.assertIsInstance(worker, ReviewWorker)
             self.assertIsNone(worker._thread)

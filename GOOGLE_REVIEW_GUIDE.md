@@ -28,7 +28,8 @@ aur [high-quality review tips](https://support.google.com/maps/answer/10357321?h
 
 ## App mein istemal
 
-1. `run.bat` se dashboard kholein. Default poster browser mein Google account verify karein.
+1. `run.bat` se dedicated ordinary Firefox kholein. Signed 1.0.7 extension ke saath
+   UK-IP check karein, phir apna Google account manually login/verify karein.
 2. UK city select karke business search, ya exact Maps link, apni rating aur apna text enter karein.
 3. Text field se bahar click karne par local reminders dikh sakte hain. Start
    par bhi ye check hota hai. Link/email, possible phone/long identifier aur
@@ -79,12 +80,12 @@ Sources: [missing/delayed reviews](https://support.google.com/business/answer/10
 
 ## Reliability aur permanent browser
 
-Poster apna persistent Chrome profile use karta hai. Optional extension mode ka
-Firefox profile aur installed signed add-on bhi preserve hote hain. Permanent
+Default ordinary Firefox apna existing `personal_data/firefox-profile/` aur signed
+add-on preserve karta hai. Optional poster ka Chrome profile alag rehta hai. Permanent
 profile ka matlab Google review ka permanent publication nahi. VPN/public IP
 aur device location alag cheezein hain; inhein change karna publication ka proof nahi.
 
-Optional extension mode mein browser preparation/verification/submission-response phase ka local deadline
+Extension mode mein browser preparation/verification/submission-response phase ka local deadline
 180 seconds hai; yeh app reliability limit hai, Google posting cadence nahi.
 Timeout aglay status/API check par recover hota hai. Submission authorize ho
 chuki ho to status Unconfirmed rehta hai aur duplicate protection preserve hoti
@@ -98,10 +99,14 @@ mein Ctrl+C karein, launcher dobara run karein aur existing dashboard
 refresh karein. Sirf server start karna ho to:
 
 ```powershell
-$env:REVIEW_MODE = 'poster'
+$env:REVIEW_MODE = 'extension'
+$env:REVIEW_BROWSER = 'firefox'
 $env:REVIEW_OPEN_BROWSER = '0'
 .\.venv\Scripts\python.exe app.py
 ```
 
-Yeh commands project directory mein chalayein. Is dashboard/backend update ke
-liye existing signed 1.0.6 extension replace/re-sign karne ki zarurat nahi.
+Yeh commands project directory mein chalayein. Is update ke liye existing Mozilla
+add-on ID `tasmee-personal-reviews@local.invalid` ke andar version 1.0.7 sign karwana
+aur us signed XPI ko existing Firefox profile mein install karna zaroori hai.
+Purana signed 1.0.6 UK-IP guard ke saath compatible nahi. Build unsigned files
+banata hai; Mozilla upload/signing ya permanent installation khud nahi karta.

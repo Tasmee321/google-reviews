@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const {webcrypto}=require("node:crypto");
 
 async function exercise(folder, kind) {
   const manifest=JSON.parse(fs.readFileSync(path.join(folder,"manifest.json"),"utf8"));
@@ -17,8 +18,15 @@ async function exercise(folder, kind) {
         if(message.action==='account') return {ok:true,email:'owner@example.com',account_index:'1'};
         if(message.action==='reconcile' && failSaved) return {ok:false,message:'No matching saved review'};
         return {ok:true,assertion:{email:'owner@example.com',saved_review_id:'fixture-saved'}};}}};
-  const context={URL,URLSearchParams,setTimeout,Date,Promise,console,Map};
+  let networkCountry='GB',networkCalls=0;
+  const context={URL,URLSearchParams,setTimeout,clearTimeout,Date,Promise,console,Map,Set,performance,
+    crypto:webcrypto,AbortController,TextDecoder,Uint8Array,fetch:async url=>{
+      networkCalls++;
+      const response=new Response('ip=8.8.8.8\nloc='+networkCountry+'\n',{headers:{'content-type':'text/plain'}});
+      Object.defineProperty(response,'url',{value:url});return response;
+    }};
   context[kind==="firefox" ? "browser" : "chrome"]=api;
+  vm.runInNewContext(fs.readFileSync(path.join(folder,"network_guard.js"),"utf8"),context);
   vm.runInNewContext(fs.readFileSync(path.join(folder,"background.js"),"utf8"),context);
   const sender={id:"fixture",frameId:0,tab:{id:1},url:"http://127.0.0.1:5000/"};
   function command(action,data,source=sender) {
@@ -29,9 +37,13 @@ async function exercise(folder, kind) {
   }
   const ping=await command("ping");
   assert.equal(ping.ok,true);
-  assert.equal(ping.version,"1.0.6");
+  assert.equal(ping.version,"1.0.7");
   assert.ok(ping.capabilities.includes('saved_checks'));
+  assert.ok(ping.capabilities.includes('uk_network_guard'));
+  assert.equal(ping.network.status,'unknown');
   assert.equal(ping.browser_kind,kind);
+  const proof=await command('network_check',{challenge:'server_nonce_123456'});
+  assert.equal(proof.ok,true);assert.equal(proof.challenge,'server_nonce_123456');assert.equal(proof.network.country,'GB');
   assert.equal((await command("login",{email:"owner@example.com"})).ok,true);
   assert.equal(opened.length,1);
   const url=new URL(opened[0].url);
@@ -61,6 +73,11 @@ async function exercise(folder, kind) {
   assert.equal((await command('check_saved',{review:{...review,business_url:'https://evil.example/maps'}})).ok,false);
   assert.equal(opened.length,count);
   assert.ok(!calls.includes('prepare') && !calls.includes('submit'));
+  networkCountry='PK';
+  const blocked=await command('login',{email:'owner@example.com'});
+  assert.equal(blocked.ok,false);assert.equal(blocked.network.allowed,false);assert.equal(blocked.network.code,'not_uk');
+  assert.equal(opened.length,count);assert.ok(networkCalls>0);
+  assert.ok(!JSON.stringify(blocked).includes('8.8.8.8'));
   console.log(kind+": ping, sign-in URL validation and sender isolation passed");
 }
 

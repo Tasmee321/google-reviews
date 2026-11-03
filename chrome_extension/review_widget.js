@@ -9,7 +9,7 @@
   };
   const normalize=value=>value.normalize("NFKC").trim().replace(/\s+/g," ").toLowerCase();
   const selected=node=>node.getAttribute("aria-checked")==="true";
-  let preparedId=null,submitted=false;
+  let preparedId=null,submitted=false,submissionPending=false;
   async function waitFor(find,message,timeout=15000) {
     const deadline=Date.now()+timeout;
     while(Date.now()<deadline) {
@@ -53,10 +53,26 @@
     const result=verify(review);preparedId=review.id;
     return result;
   }
-  function submit(review) {
+  function freshNetwork(network) {
+    const now=Date.now(),checked=Date.parse(network?.checked_at),expires=Date.parse(network?.expires_at);
+    return network?.enabled===true && network.policy==="uk-browser-egress-v1" && network.status==="verified" &&
+      network.country==="GB" && network.allowed===true && network.max_age_seconds===30 &&
+      checked<=now && now-checked<30000 && expires===checked+30000 && expires>now;
+  }
+  async function submit(review) {
+    if(submissionPending) throw new Error("This review iframe already started submission. Check Google Maps before any retry.");
+    verify(review);
+    submissionPending=true;
+    const barrier=await chrome.runtime.sendMessage({type:"TASMEE_SUBMIT_BARRIER",review});
+    const network=barrier?.network;
+    if(!barrier?.ok || !freshNetwork(network))
+      throw new Error(barrier?.message || "UK IP was not verified immediately before submission. Nothing was clicked.");
+    // Background rechecks the parent account/branch; final frame checks and the
+    // click remain in the same event-loop turn after the fresh network barrier.
     const result=verify(review);
     const post=one(all('button,[role="button"]').filter(node=>/^Post$/i.test((node.getAttribute("aria-label") || node.textContent).trim())));
     if(post.disabled || post.getAttribute("aria-disabled")==="true") throw new Error("Google's Post button is disabled.");
+    if(!freshNetwork(network)) throw new Error("UK-IP check expired before submission. Nothing was clicked.");
     submitted=true;
     post.click();
     // Acknowledge the click only. The parent Maps page verifies Google's

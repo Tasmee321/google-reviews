@@ -93,7 +93,7 @@
         <details id="extensionSetup" class="extension-setup" hidden open>
           <summary>{{ 'Connect your dedicated Firefox' if browser_kind == 'firefox' else 'Connect your normal Chrome' }}</summary>
           {% if browser_kind == 'firefox' %}
-          <ol><li><strong>about:addons</strong> mein installed Tasmee version check karein; signed 1.0.6 active hai to dobara install na karein.</li><li>Nayi extension source ke liye Mozilla-signed XPI chahiye. Existing signed add-on ko unsigned file se replace na karein.</li></ol>
+          <ol><li>Mozilla Developer Hub mein <strong>existing Tasmee add-on</strong> ke andar version <strong>1.0.7</strong> upload karein; naya add-on ID na banayein.</li><li>Mozilla se milne wali <strong>signed XPI</strong> yahan Firefox ke <strong>about:addons → gear → Install Add-on From File</strong> se install karein.</li><li>Nayi network permissions approve karke dashboard refresh karein. Purana 1.0.6 UK-IP protection ke saath compatible nahi.</li></ol>
           {% else %}
           <ol><li>Open <strong>chrome://extensions</strong> in normal Chrome.</li><li>Enable Developer mode, click <strong>Load unpacked</strong>, and select this folder:</li></ol>
           {% endif %}
@@ -108,17 +108,18 @@
           {% endif %}
         </details>
         {% if browser_kind == 'firefox' %}
-        <p class="hint">VPN protection is not verified by this app. Google sign-in se pehle Avast VPN connected, Always on aur kill switch on rakhein. Firefox ko split-tunnel exclusions mein na rakhein. Har run par wahi Firefox profile use hoga; IP rotation nahi hoti.</p>
+        <p class="hint">Har run par wahi dedicated Firefox profile aur signed add-on use hoga; personal Chrome untouched rahega. Avast VPN UK par manually connect aur kill switch ON rakhein; Firefox ko split-tunnel exclusions mein na rakhein. App VPN settings nahi badalta.</p>
         {% endif %}
         {% if poster_mode %}
         <p class="hint">Google sign-in dedicated {{ browser_label }} window mein hoga. Avast SecureLine VPN UK par manually connect karein, kill switch ON rakhein aur browser ko split-tunnel exclusions mein na rakhein. UK-IP guard VPN app ya har network route ko certify nahi karta.</p>
+        {% endif %}
         <div class="visibility-panel" aria-labelledby="networkTitle">
           <h3 id="networkTitle">UK-IP protection</h3>
           <p id="networkStatus" class="hint" role="status" aria-live="polite">Not checked. Google sign-in se pehle UK IP check hoga.</p>
           <button id="networkCheckButton" class="button secondary" type="button">Check UK IP</button>
           <p class="hint">Cloudflare ko browser ki public IP nazar aati hai; review text ya Google credentials nahi bheje jate. Same city zaroori nahi.</p>
+          {% if not poster_mode %}<p class="hint">Sign-in aur har action se pehle fresh check; final Post se pehle dobara. Visible dashboard idle ho to har 30 seconds check hota hai. Failure par app ke naye actions block hote hain; pehle se khuli tabs aur direct manual browsing ko app firewall ki tarah block nahi karta.</p>{% endif %}
         </div>
-        {% endif %}
         <form id="accountForm" novalidate>
           <label for="accountSelect">Saved account shortcuts</label>
           <select id="accountSelect" aria-describedby="accountSelectHint"><option value="">Connect an account first</option></select>
@@ -175,7 +176,7 @@
   <section class="history-section" aria-labelledby="monitorTitle">
     <div class="section-heading"><h2 id="monitorTitle">Saved-review monitoring</h2><span id="monitorStatus" class="badge">Setup required</span></div>
     <label class="check-label"><input id="autoCheck" type="checkbox" checked>Automatically check saved reviews while this dashboard is open</label>
-    <p id="monitorHint" class="hint">{{ 'Poster mode: no extension required.' if poster_mode else 'Extension 1.0.6 required.' }} Idle connected account only; one check per 10 minutes, each review no more often than every 6 hours. No automatic posting or account switching.</p>
+    <p id="monitorHint" class="hint">{{ 'Poster mode: no extension required.' if poster_mode else 'Extension 1.0.7 required.' }} Idle connected account only; one check per 10 minutes, each review no more often than every 6 hours. No automatic posting or account switching.</p>
     <p class="hint">UK-IP check sirf sampled browser requests ka country check hai; DNS/all IPv6 routes ya Avast connection ka proof nahi. Avast kill switch ON rakhein. Google aap ko signed-in account se pehchan sakta hai; VPN review deletion ko prevent nahi karta.</p>
   </section>
   <section class="history-section" aria-labelledby="diagnosticsTitle">

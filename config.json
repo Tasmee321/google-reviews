@@ -1,5 +1,5 @@
 {
-  "mode": "poster",
+  "mode": "extension",
   "port": 5000,
   "browser_channel": "chrome",
   "locale": "en-GB",

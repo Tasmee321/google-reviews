@@ -12,7 +12,7 @@ def launch_options(cfg, devices):
     else:
         options["viewport"] = {"width": 1280, "height": 900}
     # Merge options once: device descriptors also contain viewport and user_agent.
-    options.update(headless=False, locale=cfg["locale"])
+    options.update(headless=False, locale=cfg["locale"], chromium_sandbox=True)
     if cfg["browser_channel"] != "chromium":
         options["channel"] = cfg["browser_channel"]
     target = cfg["target"]

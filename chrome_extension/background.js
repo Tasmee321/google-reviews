@@ -1,6 +1,9 @@
 "use strict";
+if(!globalThis.TasmeeNetworkGuard && typeof importScripts==="function") importScripts("network_guard.js");
+const extensionNetwork=new globalThis.TasmeeNetworkGuard.UKNetworkGuard();
+const extensionEpoch=crypto.randomUUID();
 const mapsHosts = new Set(["www.google.com","google.com","maps.google.com","www.google.co.uk","www.google.com.pk"]);
-const allowedActions = new Set(["ping","login","check","resolve","prepare","verify","submit","discard","reconcile","check_saved"]);
+const allowedActions = new Set(["ping","network_check","login","check","resolve","prepare","verify","submit","discard","reconcile","check_saved"]);
 const accountIndexes=new Map();
 function accountUrl(url, email, selecting=false) {
   const parsed = new URL(safeTarget(url));
@@ -48,6 +51,7 @@ async function waitLoaded(tabId) {
 }
 async function google(tabId, action, review) {
   const tab=await chrome.tabs.get(tabId);safeMaps(tab.url);
+  await extensionNetwork.check();
   const result=await chrome.tabs.sendMessage(tabId,{type:"TASMEE_GOOGLE",action,review},{frameId:0});
   if(!result?.ok) throw new Error(result?.message || "The Google Maps page could not be verified.");
   return result;
@@ -77,18 +81,20 @@ async function widgetRequest(message,sender) {
   const review=cleanReview(message.review),key="review:"+review.id;
   const stored=(await chrome.storage.session.get(key))[key];
   const phases={prepare:["preparing"],verify:["ready","submitting"],submit:["submitting"]};
-  if(!stored || stored.tabId!==sender.tab.id || !phases[message.action]?.includes(stored.phase) ||
+  if(!stored || stored.epoch!==extensionEpoch || stored.tabId!==sender.tab.id || !phases[message.action]?.includes(stored.phase) ||
      ["text","stars","expected_name","account_email"].some(field=>stored.review[field]!==review[field]))
     throw new Error("This iframe action is not authorized by the dashboard review.");
   const expected=safeWidget(message.url),url=new URL(expected);
   if(url.origin!==parent.origin || url.searchParams.get("authuser")!==(parent.searchParams.get("authuser") || "0"))
     throw new Error("The review iframe belongs to a different Google account or origin.");
+  await extensionNetwork.check();
   const deadline=Date.now()+15000;
   while(Date.now()<deadline) {
     const frames=(await chrome.storage.session.get("widget:"+stored.tabId))["widget:"+stored.tabId] || {};
     const matches=Object.values(frames).filter(frame=>frame.url===expected);
     if(matches.length>1) throw new Error("More than one matching review iframe is open. Prepare a new preview.");
     if(matches.length===1) {
+      extensionNetwork.requireFresh();
       // Never retry submission: a dropped reply may already have reached Google.
       const response=await chrome.tabs.sendMessage(stored.tabId,
         {type:"TASMEE_WIDGET",action:message.action,review,url:expected},{frameId:matches[0].frameId});
@@ -99,11 +105,46 @@ async function widgetRequest(message,sender) {
   }
   throw new Error("Google's review iframe did not finish loading. Keep its Maps tab open and prepare again.");
 }
+async function submitBarrier(message,sender) {
+  if(sender.id!==chrome.runtime.id || !Number.isInteger(sender.frameId) || sender.frameId<0 || sender.tab?.id===undefined)
+    throw new Error("Invalid submission-check sender.");
+  safeMaps(sender.tab.url);
+  const review=cleanReview(message.review),key="review:"+review.id;
+  const stored=(await chrome.storage.session.get(key))[key];
+  if(!stored || stored.epoch!==extensionEpoch || stored.tabId!==sender.tab.id || stored.phase!=="submitting" || stored.barrierUsed ||
+    ["text","stars","expected_name","account_email"].some(field=>stored.review[field]!==review[field]))
+    throw new Error("This final submission check is no longer authorized. Check Google Maps before any retry.");
+  if(sender.frameId===0) safeMaps(sender.url);
+  else {
+    const url=safeWidget(sender.url);
+    const frames=(await chrome.storage.session.get("widget:"+stored.tabId))["widget:"+stored.tabId] || {};
+    if(frames[sender.frameId]?.url!==url) throw new Error("Unregistered review iframe cannot authorize submission.");
+    const parent=new URL(safeMaps(sender.tab.url)),frame=new URL(url);
+    if(parent.origin!==frame.origin || frame.searchParams.get("authuser")!==(parent.searchParams.get("authuser") || "0"))
+      throw new Error("The review iframe account changed before submission.");
+  }
+  // Consume authorization before network work. A lost response or background
+  // restart must never authorize a second click for this review.
+  await chrome.storage.session.set({[key]:{...stored,barrierUsed:true}});
+  await extensionNetwork.check();
+  if(sender.frameId>0) await google(stored.tabId,"verify",review);
+  extensionNetwork.requireFresh();
+  return {ok:true,network:extensionNetwork.snapshot()};
+}
 async function command(action,data,sender) {
   if(action==="ping") {
     const manifest=chrome.runtime.getManifest();
-    return {ok:true,version:manifest.version,capabilities:["saved_checks","account_selection"],browser_kind:manifest.browser_specific_settings?.gecko ? "firefox" : "chrome"};
+    return {ok:true,version:manifest.version,capabilities:["saved_checks","account_selection","uk_network_guard"],
+      network_policy:"uk-browser-egress-v1",browser_kind:manifest.browser_specific_settings?.gecko ? "firefox" : "chrome"};
   }
+  if(action==="network_check") {
+    const challenge=data?.challenge ?? "";
+    if(typeof challenge!=="string" || challenge.length>128 || (challenge && !/^[A-Za-z0-9_-]+$/.test(challenge)))
+      throw new Error("Invalid network-check challenge.");
+    await extensionNetwork.check();
+    return {ok:true,challenge};
+  }
+  if(action!=="discard" && action!=="submit") await extensionNetwork.check();
   if(action==="login") {
     if(typeof data?.email!=="string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || data.email.length>254)
       throw new Error("Enter a valid Google email.");
@@ -182,7 +223,7 @@ async function command(action,data,sender) {
       tab=await chrome.tabs.get(resolved.tabId);
       safeMaps(tab.url);
     } else tab=await chrome.tabs.create({url:review.navigation_url,active:true});
-    const state={tabId:tab.id,ownerTab:sender.tab.id,phase:"preparing",review};
+    const state={tabId:tab.id,ownerTab:sender.tab.id,phase:"preparing",review,epoch:extensionEpoch,barrierUsed:false};
     await chrome.storage.session.set({[key]:state});
     let response;
     try {
@@ -204,6 +245,9 @@ async function command(action,data,sender) {
     await chrome.tabs.remove(stored.tabId).catch(()=>{});
     return {ok:true};
   }
+  if(stored.epoch!==extensionEpoch) throw new Error("The extension restarted. This preview is no longer authorized; check Google Maps and prepare a new draft.");
+  if(["text","stars","expected_name","account_email"].some(field=>stored.review[field]!==review[field]))
+    throw new Error("The review changed after preparation. Prepare a new preview.");
   if(stored.phase!=="ready") throw new Error("Submission already started. Do not post again.");
   if(action==="verify") return google(stored.tabId,"verify",review);
   if(action==="submit") {
@@ -216,22 +260,30 @@ async function command(action,data,sender) {
 }
 // Serialize commands so double clicks cannot race the submission marker.
 let commands=Promise.resolve();
+let barriers=Promise.resolve();
+const successful=result=>({...result,network:extensionNetwork.snapshot()});
+const failed=error=>({ok:false,message:error.message,network:extensionNetwork.snapshot()});
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  if(message?.type==="TASMEE_SUBMIT_BARRIER") {
+    const task=barriers.then(()=>submitBarrier(message,sender));
+    barriers=task.catch(()=>{});task.then(result=>reply(successful(result)),error=>reply(failed(error)));
+    return true;
+  }
   if(message?.type==="TASMEE_WIDGET_READY") {
     const task=registrations.then(()=>registerWidget(sender));
     registrations=task.catch(()=>{});
-    task.then(reply,error=>reply({ok:false,message:error.message}));
+    task.then(reply,error=>reply(failed(error)));
     return true;
   }
   if(message?.type==="TASMEE_WIDGET_REQUEST") {
     // Separate from the dashboard queue: the current prepare/verify/submit
     // command is awaiting this narrowly authorized nested iframe request.
-    widgetRequest(message,sender).then(reply,error=>reply({ok:false,message:error.message}));
+    widgetRequest(message,sender).then(result=>reply(successful(result)),error=>reply(failed(error)));
     return true;
   }
   if(message?.type!=="TASMEE_COMMAND" || !allowedActions.has(message.action) || !dashboardSender(sender)) return;
   const task=commands.then(()=>command(message.action,message.data,sender));
   commands=task.catch(()=>{});
-  task.then(reply,error=>reply({ok:false,message:error.message}));
+  task.then(result=>reply(successful(result)),error=>reply(failed(error)));
   return true;
 });

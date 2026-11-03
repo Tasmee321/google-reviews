@@ -126,6 +126,12 @@
       pattern.test((item.getAttribute("aria-label")||"").trim()) || item.getAttribute("data-rating")===String(stars)));
   }
   const selected=item=>["aria-checked","aria-pressed","aria-selected"].some(attribute=>item.getAttribute(attribute)==="true");
+  function inlineAssertion(review) {
+    const info=business(review),root=form(),textarea=one(all("textarea",root));
+    if(textarea.value!==review.text) throw new Error("The review text changed after preview. Nothing was submitted.");
+    if(!selected(rating(root,review.stars))) throw new Error("The selected rating could not be verified. Nothing was submitted.");
+    return {...info,text:textarea.value,stars:review.stars};
+  }
   async function verify(review) {
     await waitAccount();
     const info=business(review);
@@ -133,10 +139,7 @@
       const response=await widget("verify",review);
       return {...business(review),text:response.text,stars:response.stars};
     }
-    const root=form(),textarea=one(all("textarea",root));
-    if(textarea.value!==review.text) throw new Error("The review text changed after preview. Nothing was submitted.");
-    if(!selected(rating(root,review.stars))) throw new Error("The selected rating could not be verified. Nothing was submitted.");
-    return {...info,text:textarea.value,stars:review.stars};
+    return inlineAssertion(review);
   }
   function button(root,pattern) {
     return one(all('button,[role="button"]',root).filter(item=>pattern.test((item.getAttribute("aria-label")||item.textContent).trim())));
@@ -162,6 +165,12 @@
     return {ok:true,assertion:await verify(review)};
   }
   let submitted=false;
+  function freshNetwork(network) {
+    const now=Date.now(),checked=Date.parse(network?.checked_at),expires=Date.parse(network?.expires_at);
+    return network?.enabled===true && network.policy==="uk-browser-egress-v1" && network.status==="verified" &&
+      network.country==="GB" && network.allowed===true && network.max_age_seconds===30 &&
+      checked<=now && now-checked<30000 && expires===checked+30000 && expires>now;
+  }
   async function submit(review) {
     if(submitted) throw new Error("This page already started a submission. Check Google Maps before posting again.");
     await verify(review);
@@ -174,9 +183,16 @@
         // explicit success in the parent page is accepted; never click again.
       }
     } else {
+      submitted=true;
+      const barrier=await chrome.runtime.sendMessage({type:"TASMEE_SUBMIT_BARRIER",review});
+      const network=barrier?.network;
+      if(!barrier?.ok || !freshNetwork(network))
+        throw new Error(barrier?.message || "UK IP was not verified immediately before submission. Nothing was clicked.");
+      // No await between revalidating the exact form/account/branch and Post.
+      inlineAssertion(review);
       const post=button(form(),/^Post$/);
       if(post.disabled || post.getAttribute("aria-disabled")==="true") throw new Error("Google's Post button is disabled.");
-      submitted=true;
+      if(!freshNetwork(network)) throw new Error("UK-IP check expired before submission. Nothing was clicked.");
       post.click();
     }
     const pattern=/^(Your review (?:has been|was) posted[.!]?|Review posted[.!]?|Thanks for your review[.!]?|Thank you for sharing[.!]?)$/i;

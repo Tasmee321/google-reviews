@@ -42,7 +42,8 @@ class NormalChromeApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app = create_app(self.temp.name, config={"mode": "extension", "network_guard": {"enabled": False}})
+        with patch.dict(os.environ, {"REVIEW_BROWSER": "chrome"}):
+            self.app = create_app(self.temp.name, config={"mode": "extension", "network_guard": {"enabled": False}})
         self.client = self.app.test_client()
         self.assertEqual(self.client.post('/api/unlock', json={'token': self.app.extensions['dashboard_token']}).status_code, 200)
         self.client.get('/')
@@ -174,7 +175,8 @@ class RealExtensionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.app=create_app(Path(self.temp.name)/'data', config={"mode": "extension", "network_guard": {"enabled": False}})
+        with patch.dict(os.environ, {"REVIEW_BROWSER": "chrome"}):
+            self.app=create_app(Path(self.temp.name)/'data', config={"mode": "extension"})
         self.server=make_server('127.0.0.1',0,self.app,threaded=True)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()
@@ -214,6 +216,15 @@ class RealExtensionTests(unittest.TestCase):
         service=self.context.service_workers[0] if self.context.service_workers else self.context.wait_for_event('serviceworker')
         self.service=service
         service.evaluate('''() => {
+            // Simulate HTTPS country replies in the actual extension worker.
+            // No Cloudflare/Google accounts or reviews are contacted by this test.
+            globalThis.fixtureCountry = 'GB';
+            extensionNetwork.fetcher = async url => {
+                if(!/^https:\\/\\/(www\\.cloudflare\\.com|1\\.1\\.1\\.1)\\/cdn-cgi\\/trace\\?/.test(url)) throw new Error('Unexpected fixture URL');
+                const response = new Response('ip=8.8.8.8\\nloc='+globalThis.fixtureCountry+'\\n', {headers:{'content-type':'text/plain'}});
+                Object.defineProperty(response,'url',{value:url});
+                return response;
+            };
             // This harness deliberately reuses its pre-intercepted Maps tab.
             // Production closes only newly created check tabs; closure is
             // asserted separately in the Node transport mocks.
@@ -243,6 +254,28 @@ class RealExtensionTests(unittest.TestCase):
             print('Account message:',self.page.locator('#accountMessage').text_content())
             print('Tabs:',[(page.url,page.title()) for page in self.context.pages])
             raise
+
+    def test_non_uk_blocks_before_google_navigation_then_recovers(self):
+        self.service.evaluate("globalThis.fixtureCountry = 'PK'")
+        self.page.get_by_role('button', name='Check connection', exact=True).click()
+        self.page.wait_for_function("() => !document.querySelector('#checkButton').disabled")
+        self.assertIn('UK', self.page.locator('#notice').inner_text())
+        self.assertEqual(self.app.extensions['review_worker'].snapshot()['status'], 'disconnected')
+        self.assertEqual(self.maps_page.evaluate('window.posts'), 0)
+        self.service.evaluate("globalThis.fixtureCountry = 'GB'")
+        self.connect()
+        self.assertTrue(self.app.extensions['review_worker'].snapshot()['network']['allowed'])
+
+    def test_network_loss_at_publish_never_clicks_post(self):
+        self.connect()
+        maps_page = self.prepare()
+        self.page.locator('#policy_confirmed').check()
+        self.service.evaluate("globalThis.fixtureCountry = 'PK'")
+        self.page.get_by_role('button', name='Post this review', exact=True).click()
+        self.page.wait_for_function("() => !document.querySelector('#publishButton').disabled")
+        self.assertEqual(maps_page.evaluate('window.posts'), 0)
+        self.assertFalse(self.app.extensions['review_worker'].snapshot()['network']['allowed'])
+        self.assertEqual(self.app.extensions['review_store'].list_reviews()[0]['status'], 'ready')
 
     def prepare(self, target='https://www.google.com/maps/place/My+Market/data=!1sfixture123', name='My Market', open_details=True):
         self.page.locator('#target').fill(target)

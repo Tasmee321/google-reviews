@@ -29,7 +29,8 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo Installed. run.bat uses poster mode from config.json.
+echo Installed. run.bat defaults to the dedicated Firefox extension workflow.
+echo Install the Mozilla-signed Tasmee 1.0.7 XPI separately; this installer does not sign add-ons.
 echo Open run.bat to start your personal dashboard.
 pause
 exit /b 0
