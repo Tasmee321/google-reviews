@@ -1,5 +1,7 @@
+# app.py
 """Local dashboard for your own Google Maps reviews."""
 import atexit
+import json
 import os
 import secrets
 import io
@@ -19,6 +21,20 @@ from build_firefox_extension import firefox_archive
 from review_policy import review_warnings, POLICY_URL, QUALITY_URL, APPEAL_URL
 
 ROOT = Path(__file__).resolve().parent
+
+
+def load_config():
+    """Load config.json from the project root. Returns an empty dict if absent."""
+    config_path = ROOT / "config.json"
+    if config_path.is_file():
+        try:
+            with config_path.open(encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
 
 
 def acquire_runtime_lock(directory):
@@ -42,16 +58,25 @@ def acquire_runtime_lock(directory):
     return handle
 
 
-def create_app(data_dir=None, worker_factory=BrowserBridge):
+def create_app(data_dir=None, worker_factory=None):
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY=secrets.token_hex(32), MAX_CONTENT_LENGTH=24000,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
         TRUSTED_HOSTS=["localhost", "127.0.0.1"],
     )
+    cfg = load_config()
     store = ReviewStore(Path(data_dir) if data_dir else ROOT / "personal_data")
     store.recover()
-    worker = worker_factory(store)
+
+    if worker_factory is None:
+        # Default: use BrowserBridge (extension mode). To use the Playwright-based
+        # ReviewWorker from poster.py instead, pass:
+        #   worker_factory=lambda s: ReviewWorker(s, cfg)
+        worker = BrowserBridge(store)
+    else:
+        worker = worker_factory(store, cfg)
+
     app.extensions.update(review_store=store, review_worker=worker)
     atexit.register(worker.close)
 
